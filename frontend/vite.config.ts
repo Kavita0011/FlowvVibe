@@ -12,6 +12,7 @@ export default defineConfig({
   build: {
     target: 'esnext',
     minify: 'esbuild',
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -26,16 +27,25 @@ export default defineConfig({
     port: 5173,
     host: '0.0.0.0',
     strictPort: false,
-    hmr: { overlay: false },
+    hmr: {
+      overlay: false,
+      clientPort: 5173
+    },
+    cors: true,
     fs: {
-      allow: ['.']
+      allow: ['.', '../..']
     }
   },
   preview: {
     port: 4173,
-    host: true
+    host: '0.0.0.0',
+    strictPort: false
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', 'zustand']
+    include: ['react', 'react-dom', 'react-router-dom', 'zustand', '@xyflow/react'],
+    exclude: []
+  },
+  css: {
+    devSourcemap: false
   }
 })
