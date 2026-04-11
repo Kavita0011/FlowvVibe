@@ -101,7 +101,9 @@ export default function Landing() {
         id: 'demo-user',
         email: email || 'demo@example.com',
         displayName: 'Demo User',
-        createdAt: new Date()
+        createdAt: new Date(),
+        isActive: true,
+        role: 'user'
       });
       navigate('/dashboard');
     }, 1000);

@@ -6,12 +6,33 @@ export interface User {
   createdAt: Date;
   subscription?: Subscription;
   role?: 'user' | 'admin';
+  phone?: string;
+  companyName?: string;
+  location?: string;
+  subscriptionStartDate?: Date;
+  lastLoginAt?: Date;
+  isActive: boolean;
 }
 
 export interface Subscription {
   tier: 'free' | 'pro' | 'enterprise';
   status: 'active' | 'cancelled' | 'expired';
   expiresAt: Date;
+  startDate?: Date;
+}
+
+export interface Payment {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  method: 'upi' | 'bank_transfer' | 'card' | 'razorpay';
+  transactionId?: string;
+  plan: 'pro' | 'enterprise';
+  createdAt: Date;
+  updatedAt?: Date;
+  notes?: string;
 }
 
 export interface Chatbot {
@@ -259,8 +280,23 @@ export interface Lead {
 }
 
 export interface AdminCredentials {
+  id: string;
   email: string;
   passwordHash: string;
   role: 'admin';
   createdAt: Date;
+  lastLoginAt?: Date;
+  isActive: boolean;
+  apiKey: string;
+}
+
+export interface UserCredentials {
+  id: string;
+  email: string;
+  passwordHash: string;
+  userId: string;
+  role: 'user';
+  createdAt: Date;
+  lastLoginAt?: Date;
+  isActive: boolean;
 }
