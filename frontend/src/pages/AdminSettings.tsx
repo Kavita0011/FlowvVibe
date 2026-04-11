@@ -443,25 +443,46 @@ export default function AdminSettings() {
                       <button onClick={() => setEditingPricing(null)}><X className="w-5 h-5 text-slate-400" /></button>
                     </div>
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-slate-400 mb-2 text-sm">Name</label>
-                        <input value={pricingForm.name} onChange={(e) => setPricingForm({...pricingForm, name: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Name</label>
+                          <input value={pricingForm.name} onChange={(e) => setPricingForm({...pricingForm, name: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Period</label>
+                          <select value={pricingForm.period} onChange={(e) => setPricingForm({...pricingForm, period: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
+                            <option value="one-time">One-time</option>
+                            <option value="month">Monthly</option>
+                            <option value="year">Yearly</option>
+                          </select>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-slate-400 mb-2 text-sm">Price (₹)</label>
-                        <input type="number" value={pricingForm.price} onChange={(e) => setPricingForm({...pricingForm, price: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Original Price (₹)</label>
+                          <input type="number" value={pricingForm.originalPrice || 0} onChange={(e) => setPricingForm({...pricingForm, originalPrice: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Sale Price (₹)</label>
+                          <input type="number" value={pricingForm.price} onChange={(e) => setPricingForm({...pricingForm, price: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-slate-400 mb-2 text-sm">Original Price (₹)</label>
-                        <input type="number" value={pricingForm.originalPrice || 0} onChange={(e) => setPricingForm({...pricingForm, originalPrice: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 mb-2 text-sm">Period</label>
-                        <select value={pricingForm.period} onChange={(e) => setPricingForm({...pricingForm, period: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
-                          <option value="one-time">One-time</option>
-                          <option value="month">Monthly</option>
-                          <option value="year">Yearly</option>
-                        </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Discount %</label>
+                          <input type="number" value={pricingForm.isOnSale ? Math.round((1 - pricingForm.price / (pricingForm.originalPrice || 1)) * 100) : 0} onChange={(e) => {
+                            const discount = Number(e.target.value);
+                            if (discount > 0 && discount <= 100) {
+                              setPricingForm({...pricingForm, isOnSale: true, price: Math.round(pricingForm.originalPrice * (1 - discount / 100)) });
+                            }
+                          }} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" placeholder="0" />
+                        </div>
+                        <div className="flex items-end">
+                          <label className="flex items-center gap-2 text-slate-300">
+                            <input type="checkbox" checked={pricingForm.isOnSale || false} onChange={(e) => setPricingForm({...pricingForm, isOnSale: e.target.checked})} className="w-4 h-4" />
+                            Active Sale
+                          </label>
+                        </div>
                       </div>
                       <div>
                         <label className="block text-slate-400 mb-2 text-sm">Description</label>
