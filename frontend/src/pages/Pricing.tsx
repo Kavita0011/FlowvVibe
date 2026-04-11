@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Building2, Sparkles, Shield, Clock, Zap } from 'lucide-react';
+import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Sparkles, Shield, Clock } from 'lucide-react';
 
 const plans = [
   {

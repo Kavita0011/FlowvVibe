@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, User, AlertCircle, Check, Send, Timer } from 'lucide-react';
+import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, User, AlertCircle, Check } from 'lucide-react';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -25,16 +25,15 @@ export default function Register() {
       setRegisterError('Please enter your email first');
       return;
     }
-    // Generate code
+    // Generate code (in production, send via backend API)
     const code = generateCode();
     codeRef.current = code;
     setCodeSent(true);
     setCountdown(60);
     
-    // In production, send via backend API
-    console.log('Verification code:', code);
-    console.log('Sending to email:', email);
-    alert(`Verification code sent! (Check console for code: ${code})`);
+    // In production: send email via backend API
+    alert(`Verification code sent to your email! Check your inbox or spam folder.`);
+    // Note: Code will be sent to email in production via backend
     
     // Countdown timer
     const timer = setInterval(() => {

@@ -51,7 +51,7 @@ export default function UserDashboard() {
   const { user, logout, payments, chatbots } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const upgradeClicked = () => navigate('/payment');
+  const upgradeClicked = () => navigate('/pricing');
 
   const userPayments = payments.filter(p => p.userId === user?.id);
   const userChatbots = chatbots.filter(c => c.userId === user?.id);

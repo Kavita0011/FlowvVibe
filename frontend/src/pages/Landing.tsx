@@ -135,7 +135,7 @@ export default function Landing() {
         
         <div className="hidden md:flex items-center gap-8">
           <button onClick={() => setActiveSection('about')} className="text-slate-300 hover:text-white transition-colors">About</button>
-          <button onClick={() => navigate('/login')} className="text-slate-300 hover:text-white transition-colors">Pricing</button>
+          <button onClick={() => navigate('/pricing')} className="text-slate-300 hover:text-white transition-colors">Pricing</button>
           <button onClick={() => setActiveSection('testimonials')} className="text-slate-300 hover:text-white transition-colors">Testimonials</button>
           <button onClick={() => setActiveSection('contact')} className="text-slate-300 hover:text-white transition-colors">Contact</button>
           <button onClick={() => setActiveSection('terms')} className="text-slate-300 hover:text-white transition-colors">Terms</button>
