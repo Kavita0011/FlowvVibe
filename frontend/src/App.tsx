@@ -21,6 +21,9 @@ const NLPTraining = lazy(() => import('./pages/NLPTraining'));
 const EmbedCode = lazy(() => import('./pages/EmbedCode'));
 const UserGuide = lazy(() => import('./pages/UserGuide'));
 const ClientCredentials = lazy(() => import('./pages/ClientCredentials'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const Terms = lazy(() => import('./pages/Terms'));
+const CookiePolicy = lazy(() => import('./pages/CookiePolicy'));
 
 function App() {
   const { isAuthenticated, isAdmin, user } = useChatbotStore();
@@ -51,6 +54,9 @@ function App() {
         <Route path="/embed" element={!isAuthenticated ? <Navigate to="/login" /> : <EmbedCode />} />
         <Route path="/guide" element={<UserGuide />} />
         <Route path="/credentials" element={!isAuthenticated ? <Navigate to="/login" /> : <ClientCredentials />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/cookies" element={<CookiePolicy />} />
       </Routes>
       </Suspense>
     </Router>

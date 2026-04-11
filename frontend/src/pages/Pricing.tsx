@@ -11,41 +11,55 @@ const plans = [
     originalPrice: 0,
     period: 'forever',
     description: 'Perfect for testing',
-    features: ['1 Chatbot', '50 Conversations/month', 'Basic Widget', 'Email Support']
+    features: ['1 Chatbot', '50 Conversations/month', 'Basic Widget', 'Email Support'],
+    validFor: 'Forever'
+  },
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 999,
+    originalPrice: 1999,
+    period: 'one-time',
+    description: 'One-time payment',
+    features: ['2 Chatbots', '200 Conversations/month', 'Basic Widget', 'Email Support', 'Slack Integration'],
+    popular: false,
+    validFor: 'Lifetime'
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: 499,
-    originalPrice: 999,
-    period: 'month',
+    price: 2499,
+    originalPrice: 4999,
+    period: 'one-time',
     description: 'Most Popular',
     features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding'],
     popular: true,
     isOnSale: true,
-    saleTitle: 'Festival Sale'
+    saleTitle: 'Limited Offer',
+    validFor: 'Lifetime'
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
-    price: 4999,
-    originalPrice: 9999,
-    period: 'month',
+    price: 9999,
+    originalPrice: 19999,
+    period: 'one-time',
     description: 'For large teams',
     features: ['Unlimited Chatbots', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee', 'White Label', 'API Access'],
     popular: false,
     isOnSale: true,
-    saleTitle: 'Festival Sale'
+    saleTitle: 'Limited Offer',
+    validFor: 'Lifetime'
   }
 ];
 
 const addons = [
-  { id: 'bookings', name: 'Booking System', price: 199, description: 'Appointment scheduling & calendar integration', icon: '📅', features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'] },
-  { id: 'call', name: 'Voice Calls', price: 299, description: 'Click-to-call & IVR', icon: '📞', features: ['Twilio integration', 'Call forwarding', 'Voicemail', 'Call recording'] },
-  { id: 'email', name: 'Email Marketing', price: 249, description: 'Automated email sequences', icon: '📧', features: ['SMTP integration', 'Email templates', 'Automated sequences', 'Analytics'] },
-  { id: 'humanHandoff', name: 'Human Handoff', price: 149, description: 'Live agent transfer', icon: '👤', features: ['Agent dashboard', 'Chat routing', 'Canned responses', 'Priority alerts'] },
-  { id: 'webhooks', name: 'Webhooks & Zapier', price: 199, description: 'Connect 1000+ apps', icon: '🔗', features: ['Zapier integration', 'Custom webhooks', '300+ apps', 'Custom actions'] },
-  { id: 'crm', name: 'CRM Integration', price: 349, description: 'Salesforce, HubSpot, Zoho', icon: '🔧', features: ['Salesforce sync', 'HubSpot integration', 'Custom CRM', 'Lead mapping'] }
+  { id: 'bookings', name: 'Booking System', price: 499, description: 'Appointment scheduling & calendar integration', icon: '📅', features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'], oneTime: true },
+  { id: 'call', name: 'Voice Calls', price: 699, description: 'Click-to-call & IVR', icon: '📞', features: ['Twilio integration', 'Call forwarding', 'Voicemail', 'Call recording'], oneTime: true },
+  { id: 'email', name: 'Email Marketing', price: 599, description: 'Automated email sequences', icon: '📧', features: ['SMTP integration', 'Email templates', 'Automated sequences', 'Analytics'], oneTime: true },
+  { id: 'humanHandoff', name: 'Human Handoff', price: 349, description: 'Live agent transfer', icon: '👤', features: ['Agent dashboard', 'Chat routing', 'Canned responses', 'Priority alerts'], oneTime: true },
+  { id: 'webhooks', name: 'Webhooks & Zapier', price: 499, description: 'Connect 1000+ apps', icon: '🔗', features: ['Zapier integration', 'Custom webhooks', '300+ apps', 'Custom actions'], oneTime: true },
+  { id: 'crm', name: 'CRM Integration', price: 799, description: 'Salesforce, HubSpot, Zoho', icon: '🔧', features: ['Salesforce sync', 'HubSpot integration', 'Custom CRM', 'Lead mapping'], oneTime: true }
 ];
 
 export default function Pricing() {
@@ -107,8 +121,9 @@ export default function Pricing() {
               <div className="mb-4">
                 {plan.originalPrice > 0 && <span className="text-slate-500 line-through mr-2">₹{plan.originalPrice}</span>}
                 <span className="text-4xl font-bold text-white">₹{plan.price}</span>
-                {plan.price > 0 && <span className="text-slate-400">/{plan.period}</span>}
+                {plan.price > 0 && <span className="text-slate-400 ml-1">one-time</span>}
               </div>
+              <p className="text-cyan-400 text-sm mb-4">{plan.validFor}</p>
               <p className="text-slate-400 text-sm mb-4">{plan.description}</p>
               <ul className="space-y-3 mb-6">{plan.features.map((feature, i) => (<li key={i} className="flex items-center gap-2 text-slate-300 text-sm"><Check className="w-4 h-4 text-green-400 flex-shrink-0" />{feature}</li>))}</ul>
               <button onClick={() => setSelectedPlan(plan.id)} disabled={plan.price === 0} className={`w-full py-3 rounded-xl font-medium transition-all ${plan.popular ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white hover:from-cyan-400 hover:to-purple-500' : 'border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20'} disabled:opacity-50`}>
@@ -133,7 +148,7 @@ export default function Pricing() {
                     {selectedAddons.includes(addon.id) && <Check className="w-4 h-4 text-white" />}
                   </div>
                 </div>
-                <div className="flex items-baseline gap-1 mb-3"><span className="text-2xl font-bold text-white">₹{addon.price}</span><span className="text-slate-400">/month</span></div>
+                <div className="flex items-baseline gap-1 mb-3"><span className="text-2xl font-bold text-white">₹{addon.price}</span><span className="text-slate-400">one-time</span></div>
                 <ul className="space-y-1">{addon.features.map((feature, i) => (<li key={i} className="flex items-center gap-2 text-slate-300 text-xs"><Check className="w-3 h-3 text-green-400 flex-shrink-0" />{feature}</li>))}</ul>
               </div>
             ))}
@@ -142,7 +157,7 @@ export default function Pricing() {
 
         {selectedPlan && plans.find(p => p.id === selectedPlan)?.price > 0 && (
           <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-2xl mx-auto">
-            <h3 className="text-2xl font-bold text-white mb-6">Payment - {plans.find(p => p.id === selectedPlan)?.name}{selectedAddons.length > 0 && <span className="text-cyan-400 text-lg ml-2">+ {selectedAddons.length} addons (₹{addonTotal}/mo)</span>}</h3>
+            <h3 className="text-2xl font-bold text-white mb-6">Payment - {plans.find(p => p.id === selectedPlan)?.name}{selectedAddons.length > 0 && <span className="text-cyan-400 text-lg ml-2">+ {selectedAddons.length} addons (₹{addonTotal} one-time)</span>}</h3>
             <div className="mb-6">
               <label className="block text-slate-400 mb-3">Payment Method</label>
               <div className="grid grid-cols-2 gap-4">

@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 
 // Pricing plans with variations
-const pricingPlans = [
-  { id: 'free', name: 'Free', price: 0, period: 'forever', description: 'For testing' },
-  { id: 'pro', name: 'Pro', price: 499, originalPrice: 999, period: 'month', description: 'Regular price', isOnSale: true, saleEnds: '2025-02-28' },
-  { id: 'enterprise', name: 'Enterprise', price: 4999, originalPrice: 9999, period: 'month', description: 'Regular price', isOnSale: true, saleEnds: '2025-02-28' }
+const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string }[] = [
+  { id: 'free', name: 'Free', price: 0, originalPrice: 0, period: 'forever', description: 'For testing', isOnSale: false },
+  { id: 'starter', name: 'Starter', price: 999, originalPrice: 1999, period: 'one-time', description: 'One-time payment', isOnSale: true, saleEnds: '2026-04-30' },
+  { id: 'pro', name: 'Pro', price: 2499, originalPrice: 4999, period: 'one-time', description: 'Most popular', isOnSale: true, saleEnds: '2026-04-30' },
+  { id: 'enterprise', name: 'Enterprise', price: 9999, originalPrice: 19999, period: 'one-time', description: 'For large teams', isOnSale: true, saleEnds: '2026-04-30' }
 ];
 
 // Festival sales
@@ -43,6 +44,9 @@ export default function AdminSettings() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddUser, setShowAddUser] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [editingPricing, setEditingPricing] = useState<string | null>(null);
+  const defaultPricing: typeof pricingPlans[number] = { id: '', name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false };
+  const [customPrices, setCustomPrices] = useState<typeof pricingPlans>(pricingPlans);
   
   // Form states
   const [editUserForm, setEditUserForm] = useState<any>({});
@@ -50,6 +54,37 @@ export default function AdminSettings() {
   const [pricingForm, setPricingForm] = useState(pricingPlans[0]);
   const [festivalForm, setFestivalForm] = useState(festivalSales[0]);
   const [customTierForm, setCustomTierForm] = useState(customTiers[0]);
+  const [newPricing, setNewPricing] = useState<Omit<typeof pricingPlans[number], 'id'>>({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false });
+
+  const handleEditPricing = (planId: string) => {
+    setEditingPricing(planId);
+    const plan = customPrices.find(p => p.id === planId);
+    if (plan) {
+      setPricingForm(plan);
+    }
+  };
+
+  const handleSavePricing = () => {
+    setCustomPrices(customPrices.map(p => p.id === editingPricing ? { ...pricingForm, isOnSale: pricingForm.isOnSale || false, originalPrice: pricingForm.originalPrice || 0 } : p));
+    setEditingPricing(null);
+    alert('Pricing saved successfully!');
+  };
+
+  const handleDeletePricing = (planId: string) => {
+    if (confirm('Are you sure you want to delete this pricing plan?')) {
+      setCustomPrices(customPrices.filter(p => p.id !== planId));
+    }
+  };
+
+  const handleAddNewPricing = () => {
+    if (!newPricing.name) {
+      alert('Please enter Plan Name');
+      return;
+    }
+    const newId = newPricing.name.toLowerCase().replace(/\s+/g, '_');
+    setCustomPrices([...customPrices, { ...newPricing, id: newId }]);
+    setNewPricing({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false });
+  };
 
   const filteredUsers = users.filter(u => 
     u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -340,7 +375,7 @@ export default function AdminSettings() {
               <h1 className="text-2xl font-bold text-white mb-6">Pricing Plans</h1>
               
               <div className="grid md:grid-cols-3 gap-6">
-                {pricingPlans.map((plan) => (
+                {customPrices.map((plan) => (
                   <div key={plan.id} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-xl font-bold text-white">{plan.name}</h3>
@@ -367,39 +402,83 @@ export default function AdminSettings() {
                       </p>
                     )}
 
-                    <button className="w-full py-2 border border-cyan-500 text-cyan-400 rounded-lg hover:bg-cyan-500/20">
-                      Edit Pricing
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEditPricing(plan.id)} className="flex-1 py-2 border border-cyan-500 text-cyan-400 rounded-lg hover:bg-cyan-500/20">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDeletePricing(plan.id)} className="px-3 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500/20">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
 
               <div className="mt-8 bg-slate-800 rounded-xl p-6 border border-slate-700">
-                <h3 className="text-white font-semibold mb-4">Set Custom Price</h3>
-                <div className="grid md:grid-cols-4 gap-4">
+                <h3 className="text-white font-semibold mb-4">Add New Pricing Plan</h3>
+                <div className="grid md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-slate-400 mb-2 text-sm">Plan ID</label>
-                    <input className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    <label className="block text-slate-400 mb-2 text-sm">Plan Name</label>
+                    <input value={newPricing.name} onChange={(e) => setNewPricing({...newPricing, name: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" placeholder="Pro" />
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-2 text-sm">Price (₹)</label>
-                    <input type="number" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-2 text-sm">Period</label>
-                    <select className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
-                      <option value="month">Monthly</option>
-                      <option value="year">Yearly</option>
-                    </select>
+                    <input type="number" value={newPricing.price} onChange={(e) => setNewPricing({...newPricing, price: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                   </div>
                   <div className="flex items-end">
-                    <button className="w-full py-2 bg-cyan-500 text-white rounded-lg">
-                      <Save className="w-4 h-4 inline mr-2" />
-                      Save
+                    <button onClick={handleAddNewPricing} className="w-full py-2 bg-cyan-500 text-white rounded-lg">
+                      <Plus className="w-4 h-4 inline mr-2" />
+                      Add Plan
                     </button>
                   </div>
                 </div>
               </div>
+
+              {/* Edit Pricing Modal */}
+              {editingPricing && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-white font-bold text-lg">Edit {pricingForm.name}</h3>
+                      <button onClick={() => setEditingPricing(null)}><X className="w-5 h-5 text-slate-400" /></button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Name</label>
+                        <input value={pricingForm.name} onChange={(e) => setPricingForm({...pricingForm, name: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Price (₹)</label>
+                        <input type="number" value={pricingForm.price} onChange={(e) => setPricingForm({...pricingForm, price: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Original Price (₹)</label>
+                        <input type="number" value={pricingForm.originalPrice || 0} onChange={(e) => setPricingForm({...pricingForm, originalPrice: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Period</label>
+                        <select value={pricingForm.period} onChange={(e) => setPricingForm({...pricingForm, period: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
+                          <option value="one-time">One-time</option>
+                          <option value="month">Monthly</option>
+                          <option value="year">Yearly</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Description</label>
+                        <input value={pricingForm.description} onChange={(e) => setPricingForm({...pricingForm, description: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-6">
+                      <button onClick={handleSavePricing} className="flex-1 py-2 bg-cyan-500 text-white rounded-lg">
+                        Save Changes
+                      </button>
+                      <button onClick={() => setEditingPricing(null)} className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

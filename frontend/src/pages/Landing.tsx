@@ -463,8 +463,9 @@ export default function Landing() {
             <div>
               <h4 className="text-white font-medium mb-4">Legal</h4>
               <ul className="space-y-2 text-slate-400 text-sm">
-                <li><button onClick={() => setActiveSection('terms')} className="hover:text-white">Terms</button></li>
-                <li><button className="hover:text-white">Privacy</button></li>
+                <li><button onClick={() => navigate('/terms')} className="hover:text-white">Terms</button></li>
+                <li><button onClick={() => navigate('/privacy')} className="hover:text-white">Privacy</button></li>
+                <li><button onClick={() => navigate('/cookies')} className="hover:text-white">Cookies</button></li>
               </ul>
             </div>
           </div>

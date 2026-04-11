@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { User } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -20,6 +21,28 @@ export default function Login() {
     
     if (!email || !password) {
       setLoginError('Please enter both email and password');
+      return;
+    }
+
+    // Demo mode fallback - works without backend
+    if (email === 'devappkavita@gmail.com' && password === 'kavitabisht2598@sbi') {
+      const adminUser: User = { id: 'admin_001', email: 'devappkavita@gmail.com', displayName: 'Admin', role: 'admin', subscriptionTier: 'enterprise', createdAt: new Date(), isActive: true } as User;
+      localStorage.setItem('token', 'demo-token');
+      localStorage.setItem('user', JSON.stringify(adminUser));
+      setUser(adminUser);
+      setIsAuthenticated(true);
+      navigate('/admin');
+      return;
+    }
+
+    // Demo user login
+    if (email === 'demo@flowvibe.ai' && password === 'demo123') {
+      const demoUser: User = { id: 'demo_001', email: 'demo@flowvibe.ai', displayName: 'Demo User', role: 'user', subscriptionTier: 'free', createdAt: new Date(), isActive: true } as User;
+      localStorage.setItem('token', 'demo-token');
+      localStorage.setItem('user', JSON.stringify(demoUser));
+      setUser(demoUser);
+      setIsAuthenticated(true);
+      navigate('/dashboard');
       return;
     }
 
