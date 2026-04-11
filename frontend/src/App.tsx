@@ -20,6 +20,7 @@ const Integrations = lazy(() => import('./pages/Integrations'));
 const NLPTraining = lazy(() => import('./pages/NLPTraining'));
 const EmbedCode = lazy(() => import('./pages/EmbedCode'));
 const UserGuide = lazy(() => import('./pages/UserGuide'));
+const ClientCredentials = lazy(() => import('./pages/ClientCredentials'));
 
 function App() {
   const { isAuthenticated, isAdmin, user } = useChatbotStore();
@@ -49,6 +50,7 @@ function App() {
         <Route path="/nlp" element={!isAuthenticated ? <Navigate to="/login" /> : <NLPTraining />} />
         <Route path="/embed" element={!isAuthenticated ? <Navigate to="/login" /> : <EmbedCode />} />
         <Route path="/guide" element={<UserGuide />} />
+        <Route path="/credentials" element={!isAuthenticated ? <Navigate to="/login" /> : <ClientCredentials />} />
       </Routes>
       </Suspense>
     </Router>
