@@ -105,11 +105,12 @@ export default function Admin() {
               { id: 'users', label: 'Users', icon: Users },
               { id: 'leads', label: 'Leads', icon: MessageCircle },
               { id: 'revenue', label: 'Revenue', icon: DollarSign },
-              { id: 'settings', label: 'Credentials', icon: Key }
+              { id: 'settings', label: 'Credentials', icon: Key },
+              { id: 'management', label: 'Management', icon: Settings, route: '/admin/settings' }
             ].map((item) => (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => item.route ? navigate(item.route) : setActiveTab(item.id)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors",
                   activeTab === item.id
@@ -267,25 +268,28 @@ export default function Admin() {
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
-                  <div>
-                    <label className="block text-slate-400 mb-2">Payment UPI</label>
-                    <input
-                      type="text"
-                      value="flowvibe@yesbank"
-                      readOnly
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
-                    />
+<div>
+                  <h4 className="text-white font-medium mb-3">Payment Integration</h4>
+                  <p className="text-slate-400 text-sm mb-4">Connect payment gateway for accepting online payments</p>
+                  <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                    <p className="text-yellow-400 text-sm font-medium">Coming Soon</p>
+                    <p className="text-slate-400 text-xs mt-1">Razorpay/Stripe integration</p>
                   </div>
-                   <div>
-                     <label className="block text-slate-400 mb-2">Bank Transfer Details</label>
-                     <div className="p-4 bg-slate-700/50 rounded-lg font-mono text-sm text-slate-300">
-                       Account Name: Kavita Bisht<br/>
-                       Email: kavitabisht2598@sbi<br/>
-                       Account No: 45065191325<br/>
-                       IFSC Code: SBIN0004633<br/>
-                       Bank: State Bank of India (SBI)
-                     </div>
-                   </div>
+                </div>
+
+                <div className="mt-4">
+                  <h4 className="text-white font-medium mb-3">Manual Payment Details</h4>
+                  <p className="text-slate-400 text-sm mb-3">Share these with customers for offline payments:</p>
+                  <div className="p-4 bg-slate-700/50 rounded-lg space-y-2">
+                    <p className="text-slate-300 text-sm"><span className="text-slate-500">UPI:</span> flowvibe@yesbank</p>
+                    <button 
+                      onClick={() => navigator.clipboard.writeText('flowvibe@yesbank')}
+                      className="text-cyan-400 text-xs hover:text-cyan-300"
+                    >
+                      Copy UPI
+                    </button>
+                  </div>
+                </div>
                 </div>
               </div>
             </>

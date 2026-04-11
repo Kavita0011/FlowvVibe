@@ -51,6 +51,7 @@ export default function UserDashboard() {
   const { user, logout, payments, chatbots } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const upgradeClicked = () => navigate('/payment');
 
   const userPayments = payments.filter(p => p.userId === user?.id);
   const userChatbots = chatbots.filter(c => c.userId === user?.id);
@@ -366,7 +367,7 @@ export default function UserDashboard() {
                     <p className="text-slate-400 text-sm">₹499/month • Renews on Jan 1, 2026</p>
                   </div>
                   <button 
-                    onClick={() => setShowUpgrade(true)}
+onClick={upgradeClicked}
                     className="px-4 py-2 bg-purple-500 text-white rounded-lg"
                   >
                     Upgrade

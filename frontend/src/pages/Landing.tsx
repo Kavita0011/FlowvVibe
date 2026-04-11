@@ -109,8 +109,13 @@ export default function Landing() {
     }, 1000);
   };
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Simulate sending email (in production, this would call your backend API)
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('Contact form submitted:', contactForm);
+    // In real app, send to: support@flowvibe.ai
+    alert(`Thank you! Your message has been sent. We'll contact you at ${contactForm.email}`);
     setContactSent(true);
   };
 
@@ -130,7 +135,7 @@ export default function Landing() {
         
         <div className="hidden md:flex items-center gap-8">
           <button onClick={() => setActiveSection('about')} className="text-slate-300 hover:text-white transition-colors">About</button>
-          <button onClick={() => setActiveSection('pricing')} className="text-slate-300 hover:text-white transition-colors">Pricing</button>
+          <button onClick={() => navigate('/login')} className="text-slate-300 hover:text-white transition-colors">Pricing</button>
           <button onClick={() => setActiveSection('testimonials')} className="text-slate-300 hover:text-white transition-colors">Testimonials</button>
           <button onClick={() => setActiveSection('contact')} className="text-slate-300 hover:text-white transition-colors">Contact</button>
           <button onClick={() => setActiveSection('terms')} className="text-slate-300 hover:text-white transition-colors">Terms</button>
