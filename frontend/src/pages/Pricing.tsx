@@ -11,7 +11,7 @@ const plans = [
     originalPrice: 0,
     period: 'forever',
     description: 'Perfect for testing',
-    features: ['1 Chatbot', '50 Conversations/month', 'Basic Widget', 'Email Support'],
+    features: ['1 Chatbot', '50 Conversations', 'Basic Widget', 'All Flow Features'],
     validFor: 'Forever'
   },
   {
@@ -21,7 +21,7 @@ const plans = [
     originalPrice: 1999,
     period: 'one-time',
     description: 'One-time payment',
-    features: ['2 Chatbots', '200 Conversations/month', 'Basic Widget', 'Email Support', 'Slack Integration'],
+    features: ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
     popular: false,
     validFor: 'Lifetime'
   },
@@ -32,7 +32,7 @@ const plans = [
     originalPrice: 4999,
     period: 'one-time',
     description: 'Most Popular',
-    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding'],
+    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
     popular: true,
     isOnSale: true,
     saleTitle: 'Limited Offer',

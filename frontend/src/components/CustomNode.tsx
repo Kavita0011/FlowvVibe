@@ -11,6 +11,8 @@ const nodeIcons: Record<string, React.ElementType> = {
   intentDetection: Zap,
   sentimentAnalysis: Zap,
   textInput: MessageSquare,
+  yesNoInput: GitBranch,
+  choiceInput: GitBranch,
   emailInput: Mail,
   phoneInput: MessageSquare,
   condition: GitBranch,
@@ -19,6 +21,8 @@ const nodeIcons: Record<string, React.ElementType> = {
   sendEmail: Mail,
   webhook: Globe,
   transferToAgent: UserPlus,
+  feedback: MessageSquare,
+  rating: MessageSquare,
   start: Play,
   end: CheckCircle,
 };
@@ -29,6 +33,8 @@ const nodeColors: Record<string, string> = {
   intentDetection: 'bg-purple-500/20 border-purple-500',
   sentimentAnalysis: 'bg-purple-500/20 border-purple-500',
   textInput: 'bg-amber-500/20 border-amber-500',
+  yesNoInput: 'bg-amber-500/20 border-amber-500',
+  choiceInput: 'bg-amber-500/20 border-amber-500',
   emailInput: 'bg-amber-500/20 border-amber-500',
   phoneInput: 'bg-amber-500/20 border-amber-500',
   condition: 'bg-pink-500/20 border-pink-500',
@@ -37,6 +43,8 @@ const nodeColors: Record<string, string> = {
   sendEmail: 'bg-blue-500/20 border-blue-500',
   webhook: 'bg-blue-500/20 border-blue-500',
   transferToAgent: 'bg-red-500/20 border-red-500',
+  feedback: 'bg-indigo-500/20 border-indigo-500',
+  rating: 'bg-indigo-500/20 border-indigo-500',
   end: 'bg-red-500/20 border-red-500',
 };
 

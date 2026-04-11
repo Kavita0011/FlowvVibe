@@ -41,11 +41,13 @@ We reserve the right to terminate accounts that violate these terms.`
 • Prices include GST as applicable
 • Premium add-ons are one-time purchases
 
-Refunds:
-• 7-day money-back guarantee on all plans
-• Refund requests must be made via email to devappkavita@gmail.com
-• Refunds are processed within 14 business days
-• Add-ons are not refundable once activated
+Refunds & Cancellations:
+• No refunds for one-time payments after purchase
+• User must report any issues within 7 days of purchase
+• After 7 days, no refunds or cancellations will be processed
+• User can delete their bot anytime but no refund will be provided
+• To report issues, contact devappkavita@gmail.com within 7 days
+• Add-ons are non-refundable once activated
 
 Payment Processing:
 • All payments are processed securely via Razorpay

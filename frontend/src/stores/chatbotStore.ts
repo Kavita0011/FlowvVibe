@@ -132,6 +132,10 @@ export const useChatbotStore = create<ChatbotState>()(
       
       setChatbots: (chatbots) => set({ chatbots }),
       setCurrentChatbot: (chatbot) => set({ currentChatbot: chatbot }),
+      deleteChatbot: (id) => set(state => ({ 
+        chatbots: state.chatbots.filter(c => c.id !== id),
+        currentChatbot: state.currentChatbot?.id === id ? null : state.currentChatbot
+      })),
       
       setPRD: (prd) => set({ prd }),
       updatePRD: (updates) => set(state => ({ prd: state.prd ? { ...state.prd, ...updates } : null })),

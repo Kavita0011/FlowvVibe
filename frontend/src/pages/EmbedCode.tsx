@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, Copy, Check, Code, Globe, ExternalLink, QrCode, Smartphone } from 'lucide-react';
+import { Bot, Copy, Check, Code, Globe, ExternalLink, QrCode, Smartphone, Shield } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -58,10 +58,29 @@ export default function EmbedCode() {
 </a>`;
 
   const handleCopy = () => {
+    if (!hasPaidPlan) {
+      navigate('/pricing');
+      return;
+    }
     const code = embedType === 'script' ? widgetCode : embedType === 'iframe' ? iframeCode : popupCode;
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    if (!hasPaidPlan) {
+      navigate('/pricing');
+      return;
+    }
+    const code = embedType === 'script' ? widgetCode : embedType === 'iframe' ? iframeCode : popupCode;
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flowvibe-widget.js';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const testUrl = `${API_URL}/widget/${currentChatbot?.id || 'demo'}`;
@@ -135,18 +154,29 @@ export default function EmbedCode() {
         </div>
 
         {/* Code Block */}
-        <div className="bg-slate-950 rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-slate-400 text-sm">Copy this code to your website</span>
-            <button onClick={handleCopy} className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'Copied!' : 'Copy Code'}
+        {!hasPaidPlan ? (
+          <div className="bg-slate-800 rounded-xl p-8 mb-6 text-center border border-yellow-500/30">
+            <Shield className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">Upgrade Required</h3>
+            <p className="text-slate-400 mb-4">Export and embed features are available on Pro and Enterprise plans only.</p>
+            <button onClick={() => navigate('/pricing')} className="px-6 py-3 bg-cyan-500 text-white rounded-xl font-medium">
+              View Plans
             </button>
           </div>
-          <pre className="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap max-h-48">
-            {embedType === 'script' ? widgetCode : embedType === 'iframe' ? iframeCode : popupCode}
-          </pre>
-        </div>
+        ) : (
+          <div className="bg-slate-950 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-slate-400 text-sm">Copy this code to your website</span>
+              <button onClick={handleCopy} className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Copied!' : 'Copy Code'}
+              </button>
+            </div>
+            <pre className="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap max-h-48">
+              {embedType === 'script' ? widgetCode : embedType === 'iframe' ? iframeCode : popupCode}
+            </pre>
+          </div>
+        )}
 
         {/* Quick Links */}
         <div className="grid grid-cols-2 gap-4">

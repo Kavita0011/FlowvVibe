@@ -33,6 +33,8 @@ const nodeCategories = {
   ],
   'Input': [
     { type: 'textInput', label: 'Text Input', icon: MessageSquare },
+    { type: 'yesNoInput', label: 'Yes/No', icon: GitBranch },
+    { type: 'choiceInput', label: 'Choice', icon: GitBranch },
     { type: 'emailInput', label: 'Email', icon: Mail },
     { type: 'phoneInput', label: 'Phone', icon: Phone },
   ],
@@ -44,6 +46,10 @@ const nodeCategories = {
   'Action': [
     { type: 'sendEmail', label: 'Send Email', icon: Mail },
     { type: 'webhook', label: 'Webhook', icon: Globe },
+  ],
+  'Feedback': [
+    { type: 'feedback', label: 'Collect Feedback', icon: MessageSquare },
+    { type: 'rating', label: 'Rating', icon: MessageSquare },
   ],
   'Human': [
     { type: 'transferToAgent', label: 'Transfer to Agent', icon: UserPlus },
@@ -83,9 +89,13 @@ export default function FlowBuilder() {
     intentDetection: (props) => <CustomNode {...props} type="intentDetection" />,
     sentimentAnalysis: (props) => <CustomNode {...props} type="sentimentAnalysis" />,
     textInput: (props) => <CustomNode {...props} type="textInput" />,
+    yesNoInput: (props) => <CustomNode {...props} type="yesNoInput" />,
+    choiceInput: (props) => <CustomNode {...props} type="choiceInput" />,
     emailInput: (props) => <CustomNode {...props} type="emailInput" />,
     phoneInput: (props) => <CustomNode {...props} type="phoneInput" />,
     condition: (props) => <CustomNode {...props} type="condition" />,
+    feedback: (props) => <CustomNode {...props} type="feedback" />,
+    rating: (props) => <CustomNode {...props} type="rating" />,
     branch: (props) => <CustomNode {...props} type="branch" />,
     delay: (props) => <CustomNode {...props} type="delay" />,
     sendEmail: (props) => <CustomNode {...props} type="sendEmail" />,
@@ -396,6 +406,115 @@ export default function FlowBuilder() {
                     <option value="us">US (+1)</option>
                     <option value="international">International</option>
                   </select>
+                </div>
+              </>
+            )}
+
+            {selectedNode.type === 'yesNoInput' && (
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Are you satisfied?"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Yes Label</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.yesLabel || 'Yes'}
+                    onChange={(e) => updateNodeData(selectedNode.id, { yesLabel: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">No Label</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.noLabel || 'No'}
+                    onChange={(e) => updateNodeData(selectedNode.id, { noLabel: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </>
+            )}
+
+            {selectedNode.type === 'choiceInput' && (
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Select an option"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Options (one per line)</label>
+                  <textarea
+                    value={(selectedNode.data as any)?.choices || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { choices: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500 h-24"
+                    placeholder="Option 1&#10;Option 2&#10;Option 3"
+                  />
+                </div>
+              </>
+            )}
+
+            {selectedNode.type === 'rating' && (
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Rate your experience (1-5)"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Max Stars</label>
+                  <select
+                    value={(selectedNode.data as any)?.maxRating || 5}
+                    onChange={(e) => updateNodeData(selectedNode.id, { maxRating: parseInt(e.target.value) })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="3">3 Stars</option>
+                    <option value="5">5 Stars</option>
+                    <option value="10">10 Stars</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {selectedNode.type === 'feedback' && (
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Feedback Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Any other feedback?"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Placeholder</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.placeholder || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { placeholder: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Type your feedback here..."
+                  />
                 </div>
               </>
             )}

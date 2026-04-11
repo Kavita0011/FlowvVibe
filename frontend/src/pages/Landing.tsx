@@ -457,6 +457,7 @@ export default function Landing() {
               <h4 className="text-white font-medium mb-4">Support</h4>
               <ul className="space-y-2 text-slate-400 text-sm">
                 <li><button onClick={() => navigate('/guide')} className="hover:text-white">User Guide</button></li>
+                <li><button onClick={() => navigate('/guide')} className="hover:text-white">Help Center</button></li>
                 <li><button onClick={() => setActiveSection('contact')} className="hover:text-white">Contact</button></li>
               </ul>
             </div>
