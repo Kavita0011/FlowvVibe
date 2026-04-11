@@ -347,30 +347,140 @@ export default function FlowBuilder() {
               </>
             )}
 
+            {selectedNode.type === 'emailInput' && (
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Email Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Please enter your email"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Error Message</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.errorMessage || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { errorMessage: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Please enter a valid email"
+                  />
+                </div>
+              </>
+            )}
+
+            {selectedNode.type === 'phoneInput' && (
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Phone Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Please enter your phone number"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Format</label>
+                  <select
+                    value={(selectedNode.data as any)?.phoneFormat || 'any'}
+                    onChange={(e) => updateNodeData(selectedNode.id, { phoneFormat: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="any">Any</option>
+                    <option value="india">India (+91)</option>
+                    <option value="us">US (+1)</option>
+                    <option value="international">International</option>
+                  </select>
+                </div>
+              </>
+            )}
+
             {selectedNode.type === 'textInput' && (
-              <div>
-                <label className="block text-slate-400 mb-2">Input Question</label>
-                <input
-                  type="text"
-                  value={(selectedNode.data as any)?.question || ''}
-                  onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                  placeholder="What would you like to ask?"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Input Question</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.question || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="What would you like to ask?"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Input Type</label>
+                  <select
+                    value={(selectedNode.data as any)?.inputType || 'text'}
+                    onChange={(e) => updateNodeData(selectedNode.id, { inputType: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                    <option value="yesno">Yes/No</option>
+                    <option value="choice">Choice (Dropdown)</option>
+                  </select>
+                </div>
+                {(selectedNode.data as any)?.inputType === 'choice' && (
+                  <div className="mt-3">
+                    <label className="block text-slate-400 mb-2">Options (comma separated)</label>
+                    <input
+                      type="text"
+                      value={(selectedNode.data as any)?.choices || ''}
+                      onChange={(e) => updateNodeData(selectedNode.id, { choices: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      placeholder="Option 1, Option 2, Option 3"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {selectedNode.type === 'condition' && (
-              <div>
-                <label className="block text-slate-400 mb-2">Condition</label>
-                <input
-                  type="text"
-                  value={(selectedNode.data as any)?.condition || ''}
-                  onChange={(e) => updateNodeData(selectedNode.id, { condition: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                  placeholder="if: value == 'yes'"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-slate-400 mb-2">Variable/Field</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.variable || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { variable: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="user.input"
+                  />
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Condition Type</label>
+                  <select
+                    value={(selectedNode.data as any)?.conditionType || 'equals'}
+                    onChange={(e) => updateNodeData(selectedNode.id, { conditionType: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="equals">Equals (=)</option>
+                    <option value="notEquals">Not Equals (!=)</option>
+                    <option value="contains">Contains</option>
+                    <option value="greaterThan">Greater Than (gt)</option>
+                    <option value="lessThan">Less Than (lt)</option>
+                    <option value="isEmpty">Is Empty</option>
+                    <option value="isNotEmpty">Is Not Empty</option>
+                  </select>
+                </div>
+                <div className="mt-3">
+                  <label className="block text-slate-400 mb-2">Value to Compare</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data as any)?.conditionValue || ''}
+                    onChange={(e) => updateNodeData(selectedNode.id, { conditionValue: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="yes"
+                  />
+                </div>
+              </>
             )}
 
             {selectedNode.type === 'delay' && (
@@ -401,25 +511,51 @@ export default function FlowBuilder() {
             {selectedNode.type === 'sendEmail' && (
               <>
                 <div>
-                  <label className="block text-slate-400 mb-2">To Email</label>
-                  <input
-                    type="email"
-                    value={(selectedNode.data as any)?.emailTo || ''}
-                    onChange={(e) => updateNodeData(selectedNode.id, { emailTo: e.target.value })}
+                  <label className="block text-slate-400 mb-2">Send To</label>
+                  <select
+                    value={(selectedNode.data as any)?.sendToType || 'fixed'}
+                    onChange={(e) => updateNodeData(selectedNode.id, { sendToType: e.target.value })}
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    placeholder="recipient@example.com"
-                  />
+                  >
+                    <option value="fixed">Fixed Email</option>
+                    <option value="user">User's Email (from input)</option>
+                  </select>
                 </div>
-                <div>
+                {(selectedNode.data as any)?.sendToType !== 'user' && (
+                  <div className="mt-3">
+                    <label className="block text-slate-400 mb-2">To Email</label>
+                    <input
+                      type="email"
+                      value={(selectedNode.data as any)?.emailTo || ''}
+                      onChange={(e) => updateNodeData(selectedNode.id, { emailTo: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      placeholder="recipient@example.com"
+                    />
+                  </div>
+                )}
+                {(selectedNode.data as any)?.sendToType === 'user' && (
+                  <div className="mt-3">
+                    <label className="block text-slate-400 mb-2">Email Field</label>
+                    <input
+                      type="text"
+                      value={(selectedNode.data as any)?.emailField || 'user.email'}
+                      onChange={(e) => updateNodeData(selectedNode.id, { emailField: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      placeholder="user.email"
+                    />
+                  </div>
+                )}
+                <div className="mt-3">
                   <label className="block text-slate-400 mb-2">Subject</label>
                   <input
                     type="text"
                     value={(selectedNode.data as any)?.emailSubject || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { emailSubject: e.target.value })}
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Subject line"
                   />
                 </div>
-                <div>
+                <div className="mt-3">
                   <label className="block text-slate-400 mb-2">Body</label>
                   <textarea
                     value={(selectedNode.data as any)?.emailBody || ''}

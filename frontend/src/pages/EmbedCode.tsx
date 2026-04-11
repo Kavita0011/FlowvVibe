@@ -7,9 +7,25 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export default function EmbedCode() {
   const navigate = useNavigate();
-  const { currentChatbot } = useChatbotStore();
+  const { user, currentChatbot } = useChatbotStore();
   const [copied, setCopied] = useState(false);
   const [embedType, setEmbedType] = useState<'script' | 'iframe' | 'popup'>('script');
+
+  const hasPaidPlan = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
+
+  if (!hasPaidPlan) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-md text-center">
+          <Bot className="w-16 h-16 text-cyan-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Upgrade Required</h2>
+          <p className="text-slate-400 mb-6">Export widget is available on Pro and Enterprise plans. Please upgrade to access this feature.</p>
+          <button onClick={() => navigate('/pricing')} className="w-full py-3 bg-cyan-500 text-white rounded-xl font-medium mb-3">View Plans</button>
+          <button onClick={() => navigate('/dashboard')} className="w-full py-3 border border-slate-600 text-slate-300 rounded-xl font-medium">Go to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
 
   const widgetCode = `<!-- FlowvVibe Chat Widget -->
 <script>
@@ -49,6 +65,14 @@ export default function EmbedCode() {
   };
 
   const testUrl = `${API_URL}/widget/${currentChatbot?.id || 'demo'}`;
+
+  const handleTest = () => {
+    if (!hasPaidPlan) {
+      navigate('/pricing');
+      return;
+    }
+    window.open(testUrl, '_blank');
+  };
 
   if (!currentChatbot) {
     return (
@@ -126,13 +150,13 @@ export default function EmbedCode() {
 
         {/* Quick Links */}
         <div className="grid grid-cols-2 gap-4">
-          <a href={testUrl} target="_blank" className="p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-cyan-500 flex items-center gap-3">
+          <button onClick={handleTest} className="p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-cyan-500 flex items-center gap-3 text-left">
             <Globe className="w-5 h-5 text-cyan-400" />
             <div>
               <h4 className="text-white font-medium">Test Widget</h4>
               <p className="text-slate-400 text-xs">Open in new tab</p>
             </div>
-          </a>
+          </button>
           <div className="p-4 bg-slate-800 rounded-xl border border-slate-700 flex items-center gap-3">
             <QrCode className="w-5 h-5 text-cyan-400" />
             <div>
