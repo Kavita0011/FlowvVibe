@@ -5,6 +5,7 @@ export interface User {
   photoURL?: string;
   createdAt: Date;
   subscription?: Subscription;
+  role?: 'user' | 'admin';
 }
 
 export interface Subscription {
@@ -39,6 +40,17 @@ export interface PRD {
   escalationRules?: string;
   tone: string;
   createdAt: Date;
+  
+  companyDescription?: string;
+  uniqueSellingPoints?: string[];
+  hoursOfOperation?: string;
+  location?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  socialLinks?: string[];
+  leadQualification?: string;
+  commonObjections?: string[];
+  competitiveAdvantages?: string;
 }
 
 export interface FAQ {
@@ -56,9 +68,13 @@ export interface FlowNode {
   type: NodeType;
   position: { x: number; y: number };
   data: NodeData;
+  hidden?: boolean;
+  draggable?: boolean;
+  selectable?: boolean;
 }
 
 export type NodeType = 
+  | 'start'
   | 'aiResponse'
   | 'intentDetection'
   | 'sentimentAnalysis'
@@ -82,24 +98,58 @@ export type NodeType =
   | 'crmUpdate'
   | 'transferToAgent'
   | 'contextTransfer'
-  | 'start'
   | 'end';
 
 export interface NodeData {
   label?: string;
   message?: string;
+  question?: string;
   condition?: string;
+  conditionValue?: string;
   delay?: number;
   webhookUrl?: string;
   apiEndpoint?: string;
+  apiMethod?: string;
+  apiHeaders?: Record<string, string>;
   emailTo?: string;
   emailSubject?: string;
   emailBody?: string;
   smsContent?: string;
   options?: string[];
+  quickReplies?: string[];
   intents?: Intent[];
   responses?: Response[];
+  validation?: 'none' | 'email' | 'phone' | 'number' | 'required';
+  errorMessage?: string;
+  successMessage?: string;
+  branchOptions?: BranchOption[];
+  leadFields?: LeadField[];
+  storeAs?: string;
+  companyUSP?: string[];
+  quickReplyButtons?: QuickReplyButton[];
   [key: string]: unknown;
+}
+
+export interface QuickReplyButton {
+  label: string;
+  action: string;
+  payload?: string;
+}
+
+export interface BranchOption {
+  id: string;
+  label: string;
+  condition: string;
+  conditionValue?: string;
+}
+
+export interface LeadField {
+  key: string;
+  label: string;
+  type: 'text' | 'email' | 'phone' | 'select' | 'date';
+  required?: boolean;
+  options?: string[];
+  validation?: string;
 }
 
 export interface Intent {
@@ -120,10 +170,13 @@ export interface FlowEdge {
   target: string;
   sourceHandle?: string;
   targetHandle?: string;
+  type?: 'default' | 'conditional';
+  label?: string;
+  data?: { condition?: string };
 }
 
 export interface Channel {
-  type: 'website' | 'whatsapp' | 'telegram' | 'slack' | 'instagram' | 'facebook';
+  type: 'website' | 'whatsapp' | 'telegram' | 'slack' | 'instagram' | 'facebook' | 'api';
   config: ChannelConfig;
   enabled: boolean;
 }
@@ -135,6 +188,9 @@ export interface ChannelConfig {
   webhookUrl?: string;
   appId?: string;
   pageId?: string;
+  apiKey?: string;
+  color?: string;
+  position?: 'bottom-left' | 'bottom-right';
 }
 
 export interface Conversation {
@@ -148,6 +204,7 @@ export interface Conversation {
   endedAt?: Date;
   rating?: number;
   feedback?: string;
+  leadData?: Record<string, string>;
 }
 
 export interface Message {
@@ -163,6 +220,7 @@ export interface MessageMetadata {
   intent?: string;
   sentiment?: 'positive' | 'neutral' | 'negative';
   confidence?: number;
+  quickReply?: string;
 }
 
 export interface Agent {
@@ -173,4 +231,36 @@ export interface Agent {
   online: boolean;
   maxChats: number;
   activeChats: number;
+}
+
+export interface Analytics {
+  chatbotId: string;
+  totalConversations: number;
+  totalMessages: number;
+  averageRating: number;
+  topIntents: { intent: string; count: number }[];
+  conversationsByDay: { date: string; count: number }[];
+  leadsCollected: number;
+}
+
+export interface Lead {
+  id: string;
+  chatbotId: string;
+  conversationId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  interest?: string;
+  budget?: string;
+  timeline?: string;
+  notes?: string;
+  createdAt: Date;
+  status: 'new' | 'contacted' | 'converted' | 'lost';
+}
+
+export interface AdminCredentials {
+  email: string;
+  passwordHash: string;
+  role: 'admin';
+  createdAt: Date;
 }

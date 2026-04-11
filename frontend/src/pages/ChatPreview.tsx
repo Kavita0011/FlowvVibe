@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { cn } from '../utils/cn';
 import { 
-  Bot, ArrowLeft, Send, User, Loader2, MessageSquare, 
-  Smile, Mehod, Frown, RefreshCw, Download, ExternalLink 
+  Bot, ArrowLeft, Send, User, Loader2, 
+  RefreshCw, Download 
 } from 'lucide-react';
-import type { Node, Edge, Message } from '../types';
+import type { Message } from '../types';
 
 type Sender = 'user' | 'bot';
 

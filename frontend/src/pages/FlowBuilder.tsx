@@ -306,7 +306,7 @@ export default function FlowBuilder() {
               <label className="block text-slate-400 mb-2">Label</label>
               <input
                 type="text"
-                value={selectedNode.data.label || ''}
+                value={(selectedNode.data as any)?.label || ''}
                 onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
                 className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
               />
@@ -317,7 +317,7 @@ export default function FlowBuilder() {
                 <div>
                   <label className="block text-slate-400 mb-2">AI Response Message</label>
                   <textarea
-                    value={selectedNode.data.message || ''}
+                    value={(selectedNode.data as any)?.message || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { message: e.target.value })}
                     rows={4}
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500 resize-none"
@@ -339,7 +339,7 @@ export default function FlowBuilder() {
                 <label className="block text-slate-400 mb-2">Input Question</label>
                 <input
                   type="text"
-                  value={selectedNode.data.question || ''}
+                  value={(selectedNode.data as any)?.question || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { question: e.target.value })}
                   className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                   placeholder="What would you like to ask?"
@@ -352,7 +352,7 @@ export default function FlowBuilder() {
                 <label className="block text-slate-400 mb-2">Condition</label>
                 <input
                   type="text"
-                  value={selectedNode.data.condition || ''}
+                  value={(selectedNode.data as any)?.condition || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { condition: e.target.value })}
                   className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                   placeholder="if: value == 'yes'"
@@ -365,7 +365,7 @@ export default function FlowBuilder() {
                 <label className="block text-slate-400 mb-2">Delay (ms)</label>
                 <input
                   type="number"
-                  value={selectedNode.data.delay || 1000}
+                  value={(selectedNode.data as any)?.delay || 1000}
                   onChange={(e) => updateNodeData(selectedNode.id, { delay: parseInt(e.target.value) })}
                   className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                 />
@@ -377,7 +377,7 @@ export default function FlowBuilder() {
                 <label className="block text-slate-400 mb-2">Webhook URL</label>
                 <input
                   type="url"
-                  value={selectedNode.data.webhookUrl || ''}
+                  value={(selectedNode.data as any)?.webhookUrl || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { webhookUrl: e.target.value })}
                   className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                   placeholder="https://..."
@@ -391,7 +391,7 @@ export default function FlowBuilder() {
                   <label className="block text-slate-400 mb-2">To Email</label>
                   <input
                     type="email"
-                    value={selectedNode.data.emailTo || ''}
+                    value={(selectedNode.data as any)?.emailTo || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { emailTo: e.target.value })}
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                     placeholder="recipient@example.com"
@@ -401,7 +401,7 @@ export default function FlowBuilder() {
                   <label className="block text-slate-400 mb-2">Subject</label>
                   <input
                     type="text"
-                    value={selectedNode.data.emailSubject || ''}
+                    value={(selectedNode.data as any)?.emailSubject || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { emailSubject: e.target.value })}
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                   />
@@ -409,7 +409,7 @@ export default function FlowBuilder() {
                 <div>
                   <label className="block text-slate-400 mb-2">Body</label>
                   <textarea
-                    value={selectedNode.data.emailBody || ''}
+                    value={(selectedNode.data as any)?.emailBody || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { emailBody: e.target.value })}
                     rows={4}
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500 resize-none"

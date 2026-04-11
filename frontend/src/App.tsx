@@ -8,6 +8,7 @@ import FlowBuilder from './pages/FlowBuilder';
 import ChatPreview from './pages/ChatPreview';
 import AgentDashboard from './pages/AgentDashboard';
 import Settings from './pages/Settings';
+import Admin from './pages/Admin';
 
 function App() {
   const { user } = useChatbotStore();
@@ -22,6 +23,7 @@ function App() {
         <Route path="/preview" element={user ? <ChatPreview /> : <Navigate to="/" />} />
         <Route path="/agent" element={user ? <AgentDashboard /> : <Navigate to="/" />} />
         <Route path="/settings" element={user ? <Settings /> : <Navigate to="/" />} />
+        <Route path="/admin" element={user ? <Admin /> : <Navigate to="/" />} />
       </Routes>
     </Router>
   );

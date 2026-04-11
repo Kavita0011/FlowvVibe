@@ -5,7 +5,7 @@ import { cn } from '../utils/cn';
 import { 
   Bot, ArrowLeft, User, Bell, CreditCard, Key, Globe, Smartphone,
   Trash2, ExternalLink, Copy, Check, Loader2, MessageSquare, 
-  Code, Shield, Database
+  Code, Shield, Database, LogOut
 } from 'lucide-react';
 
 export default function Settings() {

@@ -41,12 +41,13 @@ const nodeColors: Record<string, string> = {
 };
 
 interface CustomNodeProps extends NodeProps {
-  type?: string;
+  type: string;
 }
 
-function CustomNode({ data, selected, type = 'aiResponse' }: CustomNodeProps) {
+function CustomNode({ data, selected, type }: CustomNodeProps) {
   const Icon = nodeIcons[type] || MessageSquare;
   const colorClass = nodeColors[type] || 'bg-slate-500/20 border-slate-500';
+  const nodeData = data as any;
 
   return (
     <div className={cn(
@@ -67,22 +68,22 @@ function CustomNode({ data, selected, type = 'aiResponse' }: CustomNodeProps) {
           <Icon className="w-4 h-4 text-white" />
         </div>
         <span className="text-white font-medium text-sm truncate">
-          {data.label || type}
+          {nodeData.label || type}
         </span>
       </div>
       
-      {data.message && (
-        <p className="text-slate-300 text-xs line-clamp-2">{data.message}</p>
+      {nodeData.message && (
+        <p className="text-slate-300 text-xs line-clamp-2">{nodeData.message}</p>
       )}
       
-      {data.condition && (
+      {nodeData.condition && (
         <div className="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400">
-          {data.condition}
+          {nodeData.condition}
         </div>
       )}
       
-      {type === 'delay' && data.delay && (
-        <p className="text-slate-300 text-xs mt-1">{data.delay}ms</p>
+      {type === 'delay' && nodeData.delay && (
+        <p className="text-slate-300 text-xs mt-1">{nodeData.delay}ms</p>
       )}
       
       {type !== 'end' && (
