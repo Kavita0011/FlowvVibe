@@ -26,7 +26,7 @@ export default function Login() {
 
     // Demo mode fallback - works without backend
     if (email === 'devappkavita@gmail.com' && password === 'kavitabisht2598@sbi') {
-      const adminUser: User = { id: 'admin_001', email: 'devappkavita@gmail.com', displayName: 'Admin', role: 'admin', subscriptionTier: 'enterprise', createdAt: new Date(), isActive: true } as User;
+      const adminUser: User = { id: 'admin_001', email: 'devappkavita@gmail.com', displayName: 'Admin', role: 'admin', subscription: { tier: 'enterprise', status: 'active', startDate: new Date() }, createdAt: new Date(), isActive: true } as User;
       localStorage.setItem('token', 'demo-token');
       localStorage.setItem('user', JSON.stringify(adminUser));
       setUser(adminUser);
@@ -37,7 +37,7 @@ export default function Login() {
 
     // Demo user login
     if (email === 'demo@flowvibe.ai' && password === 'demo123') {
-      const demoUser: User = { id: 'demo_001', email: 'demo@flowvibe.ai', displayName: 'Demo User', role: 'user', subscriptionTier: 'free', createdAt: new Date(), isActive: true } as User;
+      const demoUser: User = { id: 'demo_001', email: 'demo@flowvibe.ai', displayName: 'Demo User', role: 'user', subscription: { tier: 'pro', status: 'active', startDate: new Date() }, createdAt: new Date(), isActive: true } as User;
       localStorage.setItem('token', 'demo-token');
       localStorage.setItem('user', JSON.stringify(demoUser));
       setUser(demoUser);

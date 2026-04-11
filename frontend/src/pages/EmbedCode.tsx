@@ -11,7 +11,7 @@ export default function EmbedCode() {
   const [copied, setCopied] = useState(false);
   const [embedType, setEmbedType] = useState<'script' | 'iframe' | 'popup'>('script');
 
-  const hasPaidPlan = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
+  const hasPaidPlan = (user as any)?.subscription?.tier === 'pro' || (user as any)?.subscription?.tier === 'enterprise' || (user as any)?.subscriptionTier === 'pro' || (user as any)?.subscriptionTier === 'enterprise' || (user as any)?.subscriptionTier === 'starter';
 
   if (!hasPaidPlan) {
     return (
