@@ -1,7 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
+import bookingsRouter from './routes/bookings.js';
+import webhooksRouter from './routes/webhooks.js';
+import emailRouter from './routes/email.js';
+import handoffRouter from './routes/handoff.js';
+import callRouter from './routes/call.js';
+import authRouter from './routes/auth.js';
+import apiRouter from './routes/api.js';
+import slackRouter from './routes/slack.js';
+import whatsappRouter from './routes/whatsapp.js';
 
 dotenv.config();
 
@@ -9,7 +20,16 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
+app.use(compression());
 app.use(express.json());
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', limiter);
 
 interface Chatbot {
   id: string;
@@ -317,6 +337,16 @@ async function generateAIResponseWithRAG(message: string, knowledgeBase: string[
     };
   }
 }
+
+app.use('/api/bookings', bookingsRouter);
+app.use('/api/webhooks', webhooksRouter);
+app.use('/api/email', emailRouter);
+app.use('/api/handoff', handoffRouter);
+app.use('/api/call', callRouter);
+app.use('/api/auth', authRouter);
+app.use('/api', apiRouter);
+app.use('/api/slack', slackRouter);
+app.use('/api/whatsapp', whatsappRouter);
 
 app.listen(PORT, () => {
   console.log(`FlowvVibe API running on port ${PORT}`);

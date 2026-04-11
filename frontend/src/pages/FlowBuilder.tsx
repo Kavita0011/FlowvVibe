@@ -21,7 +21,7 @@ import { cn } from '../utils/cn';
 import { 
   Bot, ArrowLeft, Save, Play, Download, Upload, 
   Settings, Plus, Trash2, Loader2, MessageSquare, GitBranch, 
-  Clock, Zap, Mail, Phone, Globe, UserPlus
+  Clock, Zap, Mail, Phone, Globe, UserPlus, Calendar, UserCheck, Database
 } from 'lucide-react';
 import CustomNode from '../components/CustomNode';
 
@@ -47,6 +47,13 @@ const nodeCategories = {
   ],
   'Human': [
     { type: 'transferToAgent', label: 'Transfer to Agent', icon: UserPlus },
+  ],
+  'Premium': [
+    { type: 'booking', label: 'Booking', icon: Calendar },
+    { type: 'makeCall', label: 'Make Call', icon: Phone },
+    { type: 'humanHandoff', label: 'Human Handoff', icon: UserCheck },
+    { type: 'zapierWebhook', label: 'Zapier', icon: Zap },
+    { type: 'crmUpdate', label: 'CRM Update', icon: Database },
   ]
 };
 
@@ -85,6 +92,11 @@ export default function FlowBuilder() {
     webhook: (props) => <CustomNode {...props} type="webhook" />,
     transferToAgent: (props) => <CustomNode {...props} type="transferToAgent" />,
     end: (props) => <CustomNode {...props} type="end" />,
+    booking: (props) => <CustomNode {...props} type="booking" />,
+    makeCall: (props) => <CustomNode {...props} type="makeCall" />,
+    humanHandoff: (props) => <CustomNode {...props} type="humanHandoff" />,
+    zapierWebhook: (props) => <CustomNode {...props} type="zapierWebhook" />,
+    crmUpdate: (props) => <CustomNode {...props} type="crmUpdate" />,
   };
 
   const onConnect = useCallback((connection: Connection) => {
@@ -131,7 +143,8 @@ export default function FlowBuilder() {
                nodeCategories['Input'].find(n => n.type === type)?.label ||
                nodeCategories['Logic'].find(n => n.type === type)?.label ||
                nodeCategories['Action'].find(n => n.type === type)?.label ||
-               nodeCategories['Human'].find(n => n.type === type)?.label || type,
+               nodeCategories['Human'].find(n => n.type === type)?.label ||
+               nodeCategories['Premium'].find(n => n.type === type)?.label || type,
         message: '',
         condition: '',
         delay: 1000,

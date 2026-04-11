@@ -119,7 +119,11 @@ export type NodeType =
   | 'crmUpdate'
   | 'transferToAgent'
   | 'contextTransfer'
-  | 'end';
+  | 'end'
+  | 'booking'
+  | 'makeCall'
+  | 'humanHandoff'
+  | 'zapierWebhook';
 
 export interface NodeData {
   label?: string;
@@ -135,7 +139,10 @@ export interface NodeData {
   emailTo?: string;
   emailSubject?: string;
   emailBody?: string;
+  emailFrom?: string;
   smsContent?: string;
+  phoneNumber?: string;
+  twilioConfig?: TwilioConfig;
   options?: string[];
   quickReplies?: string[];
   intents?: Intent[];
@@ -148,6 +155,15 @@ export interface NodeData {
   storeAs?: string;
   companyUSP?: string[];
   quickReplyButtons?: QuickReplyButton[];
+  bookingService?: string;
+  bookingDate?: string;
+  bookingTime?: string;
+  bookingSlots?: BookingSlot[];
+  agentEmail?: string;
+  agentNotification?: string;
+  zapierHookUrl?: string;
+  zapierAction?: string;
+  crmUpdate?: CRMUpdate;
   [key: string]: unknown;
 }
 
@@ -155,6 +171,19 @@ export interface QuickReplyButton {
   label: string;
   action: string;
   payload?: string;
+}
+
+export interface TwilioConfig {
+  accountSid: string;
+  authToken: string;
+  fromNumber: string;
+}
+
+export interface CRMUpdate {
+  crmType: 'salesforce' | 'hubspot' | 'zoho' | 'custom';
+  apiKey: string;
+  endpoint: string;
+  mapping: Record<string, string>;
 }
 
 export interface BranchOption {
@@ -299,4 +328,82 @@ export interface UserCredentials {
   createdAt: Date;
   lastLoginAt?: Date;
   isActive: boolean;
+}
+
+// ==================== BOOKINGS ====================
+
+export interface Booking {
+  id: string;
+  chatbotId: string;
+  userId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  service: string;
+  date: string;
+  time: string;
+  notes?: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface BookingService {
+  id: string;
+  name: string;
+  duration: number;
+  description?: string;
+  price?: number;
+}
+
+export interface BookingSlot {
+  date: string;
+  time: string;
+  available: boolean;
+}
+
+// ==================== PREMIUM FEATURES ====================
+
+export interface PremiumFeatures {
+  bookings: boolean;
+  call: boolean;
+  email: boolean;
+  humanHandoff: boolean;
+  webhooks: boolean;
+  customCRM: boolean;
+  analytics: boolean;
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  tier: 'free' | 'pro' | 'enterprise';
+  price: number;
+  yearlyPrice?: number;
+  features: PremiumFeatures;
+  limits: PlanLimits;
+  addons: Addon[];
+}
+
+export interface PlanLimits {
+  chatbots: number;
+  conversations: number;
+  leads: number;
+  users?: number;
+  storageMB?: number;
+}
+
+export interface Addon {
+  id: string;
+  name: string;
+  feature: keyof PremiumFeatures;
+  price: number;
+  description: string;
+}
+
+export interface FeatureAccess {
+  userId: string;
+  feature: keyof PremiumFeatures;
+  active: boolean;
+  expiresAt?: Date;
 }
