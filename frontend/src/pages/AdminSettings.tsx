@@ -5,33 +5,40 @@ import { cn } from '../utils/cn';
 import { 
   Bot, ArrowLeft, Settings, Users, CreditCard, Package, DollarSign, 
   TrendingUp, Calendar, Clock, Plus, X, Edit, Trash2, Check, XCircle,
-  Key, Shield, AlertTriangle, Sparkles, Tag, Percent, Gift, Star,
+  Key, Shield, AlertTriangle, Sparkles, Tag, Percent, Star,
   Save, RefreshCw, Activity, UserCheck, UserX, Search,
   MoreVertical, ChevronDown
 } from 'lucide-react';
 
 // Pricing plans with variations
-const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string }[] = [
+const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string; saleReason?: string }[] = [
   { id: 'free', name: 'Free', price: 0, originalPrice: 0, period: 'forever', description: 'For testing', isOnSale: false },
   { id: 'starter', name: 'Starter', price: 999, originalPrice: 1999, period: 'one-time', description: 'One-time payment', isOnSale: true, saleEnds: '2026-04-30' },
   { id: 'pro', name: 'Pro', price: 2499, originalPrice: 4999, period: 'one-time', description: 'Most popular', isOnSale: true, saleEnds: '2026-04-30' },
   { id: 'enterprise', name: 'Enterprise', price: 9999, originalPrice: 19999, period: 'one-time', description: 'For large teams', isOnSale: true, saleEnds: '2026-04-30' }
 ];
 
-// Festival sales
-const festivalSales = [
-  { id: 'diwali', name: 'Diwali Sale', discount: 50, startDate: '2025-10-20', endDate: '2025-11-05', active: false },
-  { id: 'holi', name: 'Holi Sale', discount: 40, startDate: '2025-03-01', endDate: '2025-03-15', active: false },
-  { id: 'newyear', name: 'New Year Sale', discount: 35, startDate: '2025-12-25', endDate: '2025-01-05', active: false },
-  { id: 'summer', name: 'Summer Sale', discount: 30, startDate: '2025-04-01', endDate: '2025-04-30', active: false },
-  { id: 'founder', name: 'Founder Day', discount: 60, startDate: '2025-06-01', endDate: '2025-06-07', active: true }
+// Sale reasons
+const saleReasons = [
+  { id: 'diwali', name: 'Diwali' },
+  { id: 'holi', name: 'Holi' },
+  { id: 'eid', name: 'Eid' },
+  { id: 'christmas', name: 'Christmas' },
+  { id: 'newyear', name: 'New Year' },
+  { id: 'birthday', name: 'Birthday' },
+  { id: 'anniversary', name: 'Anniversary' },
+  { id: 'summer', name: 'Summer Sale' },
+  { id: 'founder', name: 'Founder Day' },
+  { id: 'liquidation', name: 'Liquidation Sale' },
+  { id: 'clearance', name: 'Clearance' },
+  { id: 'other', name: 'Other' }
 ];
 
 // Custom pricing tiers
-const customTiers = [
-  { id: 'starter', name: 'Starter', minUsers: 1, maxUsers: 5, pricePerUser: 399 },
-  { id: 'team', name: 'Team', minUsers: 6, maxUsers: 20, pricePerUser: 349 },
-  { id: 'business', name: 'Business', minUsers: 21, maxUsers: 50, pricePerUser: 299 },
+const customTiers: { id: string; name: string; minUsers: number; maxUsers: string; pricePerUser: number }[] = [
+  { id: 'starter', name: 'Starter', minUsers: 1, maxUsers: '5', pricePerUser: 399 },
+  { id: 'team', name: 'Team', minUsers: 6, maxUsers: '20', pricePerUser: 349 },
+  { id: 'business', name: 'Business', minUsers: 21, maxUsers: '50', pricePerUser: 299 },
   { id: 'enterprise_custom', name: 'Enterprise', minUsers: 51, maxUsers: 'unlimited', pricePerUser: 249 }
 ];
 
@@ -52,9 +59,33 @@ export default function AdminSettings() {
   const [editUserForm, setEditUserForm] = useState<any>({});
   const [editPaymentForm, setEditPaymentForm] = useState<any>({});
   const [pricingForm, setPricingForm] = useState(pricingPlans[0]);
-  const [festivalForm, setFestivalForm] = useState(festivalSales[0]);
   const [customTierForm, setCustomTierForm] = useState(customTiers[0]);
-  const [newPricing, setNewPricing] = useState<Omit<typeof pricingPlans[number], 'id'>>({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false });
+  const [customTiersList, setCustomTiersList] = useState(customTiers);
+  const [editingTier, setEditingTier] = useState<string | null>(null);
+  const [newPricing, setNewPricing] = useState<Omit<typeof pricingPlans[number], 'id'>>({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false, saleReason: '' });
+  const [newTier, setNewTier] = useState({ name: '', minUsers: 1, maxUsers: '10', pricePerUser: 399 });
+
+  const handleEditTier = (tierId: string) => {
+    setEditingTier(tierId);
+    const tier = customTiersList.find(t => t.id === tierId);
+    if (tier) setCustomTierForm(tier);
+  };
+
+  const handleSaveTier = () => {
+    setCustomTiersList(customTiersList.map(t => t.id === editingTier ? { ...customTierForm } : t));
+    setEditingTier(null);
+    alert('Tier saved!');
+  };
+
+  const handleDeleteTier = (tierId: string) => {
+    if (confirm('Delete this tier?')) setCustomTiersList(customTiersList.filter(t => t.id !== tierId));
+  };
+
+  const handleAddTier = () => {
+    if (!newTier.name) return alert('Enter tier name');
+    setCustomTiersList([...customTiersList, { ...newTier, id: newTier.name.toLowerCase().replace(/\s+/g, '_') }]);
+    setNewTier({ name: '', minUsers: 1, maxUsers: '10', pricePerUser: 399 });
+  };
 
   const handleEditPricing = (planId: string) => {
     setEditingPricing(planId);
@@ -136,7 +167,6 @@ export default function AdminSettings() {
               { id: 'users', label: 'User Management', icon: Users },
               { id: 'payments', label: 'Payments', icon: CreditCard },
               { id: 'pricing', label: 'Pricing Plans', icon: DollarSign },
-              { id: 'festive', label: 'Festival Sales', icon: Gift },
               { id: 'tiers', label: 'Custom Tiers', icon: Package },
               { id: 'admin', label: 'Admin Profile', icon: Key },
               { id: 'activity', label: 'Activity Log', icon: Activity }
@@ -477,13 +507,24 @@ export default function AdminSettings() {
                             }
                           }} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" placeholder="0" />
                         </div>
-                        <div className="flex items-end">
+                        <div className="flex items-end pb-2">
                           <label className="flex items-center gap-2 text-slate-300">
-                            <input type="checkbox" checked={pricingForm.isOnSale || false} onChange={(e) => setPricingForm({...pricingForm, isOnSale: e.target.checked})} className="w-4 h-4" />
-                            Active Sale
+                            <input type="checkbox" checked={pricingForm.isOnSale || false} onChange={(e) => setPricingForm({...pricingForm, isOnSale: e.target.checked, saleReason: e.target.checked ? pricingForm.saleReason || 'other' : ''})} className="w-4 h-4" />
+                            Enable Sale
                           </label>
                         </div>
                       </div>
+                      {pricingForm.isOnSale && (
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Sale Reason</label>
+                          <select value={pricingForm.saleReason || ''} onChange={(e) => setPricingForm({...pricingForm, saleReason: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
+                            <option value="">Select reason...</option>
+                            {saleReasons.map(reason => (
+                              <option key={reason.id} value={reason.id}>{reason.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-slate-400 mb-2 text-sm">Description</label>
                         <input value={pricingForm.description} onChange={(e) => setPricingForm({...pricingForm, description: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
@@ -503,75 +544,7 @@ export default function AdminSettings() {
             </>
           )}
 
-          {/* Festival Sales Tab */}
-          {activeTab === 'festive' && (
-            <>
-              <h1 className="text-2xl font-bold text-white mb-6">Festival Sales</h1>
-              
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {festivalSales.map((sale) => (
-                  <div key={sale.id} className={cn(
-                    "bg-slate-800 rounded-xl p-6 border",
-                    sale.active ? "border-green-500" : "border-slate-700"
-                  )}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <Gift className="w-5 h-5 text-purple-400" />
-                        <h3 className="text-white font-semibold">{sale.name}</h3>
-                      </div>
-                      <span className={cn(
-                        "px-2 py-1 rounded-full text-xs",
-                        sale.active ? "bg-green-500/20 text-green-400" : "bg-slate-500/20 text-slate-400"
-                      )}>
-                        {sale.active ? 'Active' : 'Scheduled'}
-                      </span>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <span className="text-2xl font-bold text-green-400">-{sale.discount}%</span>
-                      <span className="text-slate-400"> discount</span>
-                    </div>
-                    
-                    <div className="text-slate-400 text-sm space-y-1">
-                      <p>Start: {sale.startDate}</p>
-                      <p>End: {sale.endDate}</p>
-                    </div>
-                    
-                    <button className="w-full mt-4 py-2 border border-cyan-500 text-cyan-400 rounded-lg hover:bg-cyan-500/20">
-                      Edit Sale
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 bg-slate-800 rounded-xl p-6 border border-slate-700">
-                <h3 className="text-white font-semibold mb-4">Create New Festival Sale</h3>
-                <div className="grid md:grid-cols-5 gap-4">
-                  <div>
-                    <label className="block text-slate-400 mb-2 text-sm">Sale Name</label>
-                    <input className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-2 text-sm">Discount %</label>
-                    <input type="number" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-2 text-sm">Start Date</label>
-                    <input type="date" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-2 text-sm">End Date</label>
-                    <input type="date" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
-                  </div>
-                  <div className="flex items-end">
-                    <button className="w-full py-2 bg-purple-500 text-white rounded-lg">
-                      Create Sale
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+          
 
           {/* Custom Tiers Tab */}
           {activeTab === 'tiers' && (
@@ -589,7 +562,7 @@ export default function AdminSettings() {
                     </tr>
                   </thead>
                   <tbody>
-                    {customTiers.map((tier) => (
+                    {customTiersList.map((tier) => (
                       <tr key={tier.id} className="border-t border-slate-700">
                         <td className="px-6 py-4 text-white font-medium">{tier.name}</td>
                         <td className="px-6 py-4 text-slate-400">
@@ -597,9 +570,14 @@ export default function AdminSettings() {
                         </td>
                         <td className="px-6 py-4 text-green-400">₹{tier.pricePerUser}/user</td>
                         <td className="px-6 py-4">
-                          <button className="p-2 text-cyan-400 hover:bg-cyan-500/20 rounded-lg">
-                            <Edit className="w-4 h-4" />
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleEditTier(tier.id)} className="p-2 text-cyan-400 hover:bg-cyan-500/20 rounded-lg">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteTier(tier.id)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -612,25 +590,61 @@ export default function AdminSettings() {
                 <div className="grid md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-slate-400 mb-2 text-sm">Tier Name</label>
-                    <input className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    <input value={newTier.name} onChange={(e) => setNewTier({...newTier, name: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" placeholder="Enterprise" />
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-2 text-sm">Min Users</label>
-                    <input type="number" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    <input type="number" value={newTier.minUsers} onChange={(e) => setNewTier({...newTier, minUsers: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-2 text-sm">Max Users</label>
-                    <input type="number" placeholder="Leave empty for unlimited" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    <label className="block text-slate-400 mb-2 text-sm">Max Users (leave empty for unlimited)</label>
+                    <input type="text" value={newTier.maxUsers} onChange={(e) => setNewTier({...newTier, maxUsers: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" placeholder="50 or unlimited" />
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-2 text-sm">Price/User</label>
-                    <input type="number" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    <input type="number" value={newTier.pricePerUser} onChange={(e) => setNewTier({...newTier, pricePerUser: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                   </div>
                 </div>
-                <button className="mt-4 px-6 py-2 bg-cyan-500 text-white rounded-lg">
+                <button onClick={handleAddTier} className="mt-4 px-6 py-2 bg-cyan-500 text-white rounded-lg">
                   Add Tier
                 </button>
               </div>
+
+              {/* Edit Tier Modal */}
+              {editingTier && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-white font-bold text-lg">Edit {customTierForm.name}</h3>
+                      <button onClick={() => setEditingTier(null)}><X className="w-5 h-5 text-slate-400" /></button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Tier Name</label>
+                        <input value={customTierForm.name} onChange={(e) => setCustomTierForm({...customTierForm, name: e.target.value})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Min Users</label>
+                          <input type="number" value={customTierForm.minUsers} onChange={(e) => setCustomTierForm({...customTierForm, minUsers: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-2 text-sm">Max Users</label>
+                          <input type="text" value={customTierForm.maxUsers} onChange={(e) => setCustomTierForm({...customTierForm, maxUsers: e.target.value || 'unlimited'})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" placeholder="unlimited" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-2 text-sm">Price per User (₹)</label>
+                        <input type="number" value={customTierForm.pricePerUser} onChange={(e) => setCustomTierForm({...customTierForm, pricePerUser: Number(e.target.value)})} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-6">
+                      <button onClick={handleSaveTier} className="flex-1 py-2 bg-cyan-500 text-white rounded-lg">Save</button>
+                      <button onClick={() => setEditingTier(null)} className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
