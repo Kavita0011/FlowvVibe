@@ -165,3 +165,41 @@ CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_chatbot ON conversations(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(timestamp DESC);
+
+-- Enable RLS (Row Level Security)
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chatbots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for Users
+CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
+
+-- RLS Policies for Chatbots
+CREATE POLICY "Users can view own chatbots" ON chatbots FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create chatbots" ON chatbots FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own chatbots" ON chatbots FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own chatbots" ON chatbots FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Leads
+CREATE POLICY "Users can view own leads" ON leads FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create leads" ON leads FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own leads" ON leads FOR UPDATE USING (auth.uid() = user_id);
+
+-- RLS Policies for Bookings
+CREATE POLICY "Users can view own bookings" ON bookings FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create bookings" ON bookings FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- RLS Policies for Conversations
+CREATE POLICY "Users can view own conversations" ON conversations FOR SELECT USING (auth.uid() = user_id);
+
+-- RLS Policies for Messages
+CREATE POLICY "Users can view own messages" ON messages FOR SELECT USING (
+  EXISTS (SELECT 1 FROM conversations WHERE id = messages.conversation_id AND user_id = auth.uid())
+);
