@@ -6,10 +6,10 @@ package-lock.json/
 /*package-lock.json/
 
 
-# Build output
+# Build outputs
 dist/
 build/
-*.log
+frontend/dist/
 
 # Environment
 .env
@@ -25,6 +25,15 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+*.tsbuildinfo
+vite.config.ts.timestamp-*
 
 # Backend
 firebase-backup/
