@@ -58,11 +58,17 @@ function CustomNode({ data, selected, type }: CustomNodeProps) {
   const nodeData = data as any;
 
   return (
-    <div className={cn(
-      "w-48 rounded-xl border-2 p-3 transition-all",
-      colorClass,
-      selected ? "shadow-lg shadow-cyan-500/30" : ""
-    )}>
+    <div 
+      className={cn(
+        "w-48 rounded-xl border-2 p-3 transition-all",
+        colorClass,
+        selected ? "shadow-lg shadow-cyan-500/30" : ""
+      )}
+      role="button"
+      aria-label={`${nodeData.label || type} node`}
+      aria-selected={selected}
+      title={nodeData.label || type}
+    >
       {type !== 'start' && (
         <Handle 
           type="target" 
