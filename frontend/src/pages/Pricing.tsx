@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Sparkles, Shield, Clock } from 'lucide-react';
+import { supabase } from '../supabase';
 
 const planFeatures: Record<string, string[]> = {
   'free': ['1 Chatbot', '50 Conversations', 'Basic Widget', 'All Flow Features'],
@@ -19,35 +20,51 @@ const addons = [
   { id: 'crm', name: 'CRM Integration', price: 799, description: 'Salesforce, HubSpot, Zoho', icon: '🔧', features: ['Salesforce sync', 'HubSpot integration', 'Custom CRM', 'Lead mapping'], oneTime: true }
 ];
 
+const defaultPlans = [
+  { id: 'free', name: 'Free', price: 0, originalPrice: 0, period: 'forever', description: 'For testing', features: planFeatures['free'], validFor: 'Forever', isOnSale: false, popular: false },
+  { id: 'starter', name: 'Starter', price: 999, originalPrice: 1999, period: 'one-time', description: 'One-time payment', features: planFeatures['starter'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Limited', popular: false },
+  { id: 'pro', name: 'Pro', price: 2499, originalPrice: 4999, period: 'one-time', description: 'Most popular', features: planFeatures['pro'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Limited', popular: true },
+  { id: 'enterprise', name: 'Enterprise', price: 9999, originalPrice: 19999, period: 'one-time', description: 'For large teams', features: planFeatures['enterprise'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Limited', popular: false }
+];
+
 export default function Pricing() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useChatbotStore();
-  const [plans, setPlans] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>(defaultPlans);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi'>('card');
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/psadmin/pricing')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+    async function fetchPlans() {
+      try {
+        const { data, error } = await supabase
+          .from('pricing_plans')
+          .select('*')
+          .order('price', { ascending: true });
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
           setPlans(data.map((plan: any) => ({
             id: plan.id,
             name: plan.name,
             price: plan.price,
-            originalPrice: plan.originalPrice,
+            originalPrice: plan.original_price,
             period: plan.period,
             description: plan.description || '',
             features: planFeatures[plan.id] || [],
             validFor: plan.period === 'forever' ? 'Forever' : 'Lifetime',
-            isOnSale: plan.isOnSale,
-            saleTitle: plan.saleReason || 'Sale',
+            isOnSale: plan.is_on_sale,
+            saleTitle: plan.sale_reason || 'Sale',
             popular: plan.id === 'pro'
           })));
         }
-      })
-      .catch(() => console.log('Using fallback pricing'));
+      } catch (err) {
+        console.log('Using default pricing');
+      }
+    }
+    fetchPlans();
   }, []);
   const [upiId, setUpiId] = useState('');
   const [cardNumber, setCardNumber] = useState('');

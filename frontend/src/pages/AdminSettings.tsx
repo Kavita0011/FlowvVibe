@@ -9,6 +9,7 @@ import {
   Save, RefreshCw, Activity, UserCheck, UserX, Search,
   MoreVertical, ChevronDown
 } from 'lucide-react';
+import { supabase } from '../supabase';
 
 // Pricing plans with variations
 const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string; saleReason?: string }[] = [
@@ -54,78 +55,96 @@ export default function AdminSettings() {
   const [editingPricing, setEditingPricing] = useState<string | null>(null);
   const defaultPricing: typeof pricingPlans[number] = { id: '', name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false };
   const [customPrices, setCustomPrices] = useState<typeof pricingPlans>(pricingPlans);
-  const PSADMIN_BASE = 'http://localhost:3001/api/psadmin';
   const [backendLoading, setBackendLoading] = useState(false);
-  const [backendError, setBackendError] = useState<string | null>(null);
+
   const fetchPricingFromBackend = async () => {
     try {
       setBackendLoading(true);
-      const res = await fetch(`${PSADMIN_BASE}/pricing`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) setCustomPrices(data);
-      } else {
-        setBackendError('Failed to load pricing from PSAdmin');
+      const { data, error } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setCustomPrices(data.map((plan: any) => ({
+          id: plan.id,
+          name: plan.name,
+          price: plan.price,
+          originalPrice: plan.original_price,
+          period: plan.period,
+          description: plan.description,
+          isOnSale: plan.is_on_sale,
+          saleReason: plan.sale_reason,
+          saleEnds: plan.sale_ends
+        })));
       }
     } catch (e) {
-      console.error(e);
-      setBackendError('Failed to load pricing from PSAdmin');
+      console.error('Failed to fetch pricing:', e);
     } finally {
       setBackendLoading(false);
     }
   };
+
   const fetchTiersFromBackend = async () => {
     try {
-      const res = await fetch(`${PSADMIN_BASE}/tiers`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) setCustomTiersList(data);
+      const { data, error } = await supabase.from('custom_tiers').select('*').order('min_users', { ascending: true });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setCustomTiersList(data.map((tier: any) => ({
+          id: tier.id,
+          name: tier.name,
+          minUsers: tier.min_users,
+          maxUsers: tier.max_users,
+          pricePerUser: tier.price_per_user
+        })));
       }
     } catch (e) {
-      console.error(e);
+      console.error('Failed to fetch tiers:', e);
     }
   };
+
   const savePricingToBackend = async () => {
     try {
-      const res = await fetch(`${PSADMIN_BASE}/pricing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pricing: customPrices })
-      });
-      if (res.ok) {
-        await fetchPricingFromBackend();
-        alert('Pricing saved to PSAdmin');
-      } else {
-        const err = await res.json();
-        alert('Error saving pricing: ' + (err?.error || 'Unknown error'));
+      for (const plan of customPrices) {
+        const { error } = await supabase.from('pricing_plans').upsert({
+          id: plan.id,
+          name: plan.name,
+          price: plan.price,
+          original_price: plan.originalPrice,
+          period: plan.period,
+          description: plan.description,
+          is_on_sale: plan.isOnSale,
+          sale_reason: plan.saleReason,
+          sale_ends: plan.saleEnds
+        }, { onConflict: 'id' });
+        if (error) throw error;
       }
+      alert('Pricing saved successfully!');
     } catch (e) {
-      console.error('Error saving pricing', e);
+      console.error('Error saving pricing:', e);
+      alert('Error saving pricing');
     }
   };
+
   const saveTiersToBackend = async () => {
     try {
-      const res = await fetch(`${PSADMIN_BASE}/tiers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tiers: customTiersList })
-      });
-      if (res.ok) {
-        await fetchTiersFromBackend();
-        alert('Tiers saved to PSAdmin');
-      } else {
-        const err = await res.json();
-        alert('Error saving tiers: ' + (err?.error || 'Unknown error'));
+      for (const tier of customTiersList) {
+        const { error } = await supabase.from('custom_tiers').upsert({
+          id: tier.id,
+          name: tier.name,
+          min_users: tier.minUsers,
+          max_users: tier.maxUsers,
+          price_per_user: tier.pricePerUser
+        }, { onConflict: 'id' });
+        if (error) throw error;
       }
+      alert('Tiers saved successfully!');
     } catch (e) {
-      console.error('Error saving tiers', e);
+      console.error('Error saving tiers:', e);
+      alert('Error saving tiers');
     }
   };
-  // Load initial data from PSAdmin on mount
+
   useEffect(() => {
     fetchPricingFromBackend();
     fetchTiersFromBackend();
-    // eslint-disable-next-line
   }, []);
   
   // Form states

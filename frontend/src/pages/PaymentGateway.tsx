@@ -6,6 +6,7 @@ import {
   ArrowLeft, CreditCard, Smartphone, Building2, Lock, Check, 
   Loader2, CheckCircle, Shield, Download, FileText, Copy
 } from 'lucide-react';
+import { supabase } from '../supabase';
 
 const ADDONS_DATA = [
   { id: 'bookings', name: 'Booking System', price: 499, features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'] },
@@ -23,18 +24,26 @@ const planFeatures: Record<string, string[]> = {
   'enterprise': ['Unlimited Chatbots', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee', 'White Label', 'API Access']
 };
 
+const defaultPlans = [
+  { id: 'free', name: 'Free', price: 0, features: planFeatures['free'] },
+  { id: 'starter', name: 'Starter', price: 999, features: planFeatures['starter'] },
+  { id: 'pro', name: 'Pro', price: 2499, features: planFeatures['pro'] },
+  { id: 'enterprise', name: 'Enterprise', price: 9999, features: planFeatures['enterprise'] }
+];
+
 export default function PaymentGateway() {
   const navigate = useNavigate();
   const location = useLocation();
   const { addPayment, user } = useChatbotStore();
   const [paymentStep, setPaymentStep] = useState<'method' | 'details' | 'confirm'>('method');
-  const [PLANS_DATA, setPlansData] = useState<any[]>([]);
+  const [PLANS_DATA, setPlansData] = useState<any[]>(defaultPlans);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/psadmin/pricing')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+    async function fetchPlans() {
+      try {
+        const { data, error } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
+        if (error) throw error;
+        if (data && data.length > 0) {
           setPlansData(data.map((plan: any) => ({
             id: plan.id,
             name: plan.name,
@@ -42,8 +51,11 @@ export default function PaymentGateway() {
             features: planFeatures[plan.id] || []
           })));
         }
-      })
-      .catch(() => console.log('Using fallback pricing'));
+      } catch (err) {
+        console.log('Using default pricing');
+      }
+    }
+    fetchPlans();
   }, []);
   const [selectedMethod, setSelectedMethod] = useState<'card' | 'upi' | 'bank'>('card');
   const [processing, setProcessing] = useState(false);

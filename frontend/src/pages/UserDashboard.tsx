@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import type { PRD } from '../types';
 import { cn } from '../utils/cn';
+import { 
+  Bot, ArrowLeft, Plus, Settings, CreditCard, Users, MessageSquare,
+  TrendingUp, Calendar, Clock, LogOut, Copy, ExternalLink, MoreVertical,
+  ChevronRight, Zap, Star, Check, AlertCircle, Play, Pause, Trash2,
+  Mail, Phone, Building2, MapPin, User
+} from 'lucide-react';
+import { supabase } from '../supabase';
 
 const planFeatures: Record<string, string[]> = {
   'free': ['1 Chatbot', '50 Conversations/month', 'Basic Analytics', 'Email Support'],
@@ -10,12 +17,13 @@ const planFeatures: Record<string, string[]> = {
   'pro': ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
   'enterprise': ['Unlimited Chatbots', 'All Integrations', 'Dedicated Support', 'Custom Development', 'SLA Guarantee', 'White Label']
 };
-import { 
-  Bot, ArrowLeft, Plus, Settings, CreditCard, Users, MessageSquare,
-  TrendingUp, Calendar, Clock, LogOut, Copy, ExternalLink, MoreVertical,
-  ChevronRight, Zap, Star, Check, AlertCircle, Play, Pause, Trash2,
-  Mail, Phone, Building2, MapPin, User
-} from 'lucide-react';
+
+const defaultSubscriptionPlans = [
+  { id: 'free', name: 'Free', price: 0, features: planFeatures['free'], popular: false },
+  { id: 'starter', name: 'Starter', price: 999, features: planFeatures['starter'], popular: false },
+  { id: 'pro', name: 'Pro', price: 2499, features: planFeatures['pro'], popular: true },
+  { id: 'enterprise', name: 'Enterprise', price: 9999, features: planFeatures['enterprise'], popular: false }
+];
 
 const stats = [
   { label: 'Total Bots', value: '3', icon: Bot, change: '+1' },
@@ -66,24 +74,25 @@ export default function UserDashboard() {
   const { user, logout, payments, chatbots, setPRD } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>(defaultSubscriptionPlans);
   const upgradeClicked = () => navigate('/pricing');
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/psadmin/pricing')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+    async function fetchPlans() {
+      try {
+        const { data, error } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
+        if (error) throw error;
+        if (data && data.length > 0) {
           setSubscriptionPlans(data.map((plan: any) => ({
             id: plan.id,
-            name: plan.name,
-            price: plan.price,
-            features: planFeatures[plan.id] || [],
             popular: plan.id === 'pro'
           })));
         }
-      })
-      .catch(() => console.log('Using fallback pricing'));
+      }
+    } catch (err) {
+      console.log('Using default pricing');
+    }
+    fetchPlans();
   }, []);
 
   const userPayments = payments.filter(p => p.userId === user?.id);
