@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { cn } from '../utils/cn';
 import { 
   Bot, ArrowLeft, Send, User, Loader2, 
-  RefreshCw, Download 
+  RefreshCw, Download, Mic, MicOff, Volume2, VolumeX, Phone, Video, Smile, Paperclip
 } from 'lucide-react';
 import type { Message } from '../types';
 
@@ -17,7 +18,12 @@ export default function ChatPreview() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [rating, setRating] = useState<number | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const speechSynthesisRef = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -123,6 +129,54 @@ export default function ChatPreview() {
     }
   };
 
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+    } else {
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInput(transcript);
+          setIsListening(false);
+        };
+        
+        recognitionRef.current.onerror = () => {
+          setIsListening(false);
+          toast.error('Voice recognition failed');
+        };
+        
+        recognitionRef.current.start();
+        setIsListening(true);
+      } else {
+        toast.error('Voice recognition not supported in this browser');
+      }
+    }
+  };
+
+  const speakMessage = (text: string) => {
+    if (!speechSynthesisRef) return;
+    
+    if (speechSynthesisRef.speaking) {
+      speechSynthesisRef.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    speechSynthesisRef.speak(utterance);
+  };
+
   const exportWidget = () => {
     const widgetCode = `<script>
   (function() {
@@ -137,7 +191,7 @@ export default function ChatPreview() {
 </script>`;
     
     navigator.clipboard.writeText(widgetCode);
-    alert('Widget code copied to clipboard!');
+    toast.success('Widget code copied to clipboard!');
   };
 
   return (
@@ -216,6 +270,15 @@ export default function ChatPreview() {
                       : "bg-slate-700 text-white"
                   )}>
                     <p className="text-sm">{msg.content}</p>
+                    {msg.sender === 'bot' && voiceEnabled && (
+                      <button 
+                        onClick={() => speakMessage(msg.content)}
+                        className="mt-1 text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                      >
+                        {isSpeaking ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                        {isSpeaking ? 'Stop' : 'Listen'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -235,7 +298,14 @@ export default function ChatPreview() {
             </div>
 
             <div className="border-t border-slate-700 p-4">
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                <button 
+                  onClick={() => setVoiceEnabled(!voiceEnabled)}
+                  className={`p-2 rounded-full transition-colors ${voiceEnabled ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                  title="Toggle voice features"
+                >
+                  {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                </button>
                 <input
                   type="text"
                   value={input}
@@ -244,6 +314,15 @@ export default function ChatPreview() {
                   placeholder="Type your message..."
                   className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-full text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500"
                 />
+                {voiceEnabled && (
+                  <button 
+                    onClick={toggleVoiceInput}
+                    className={`p-2 rounded-full transition-colors ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                    title="Voice input"
+                  >
+                    {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                )}
                 <button 
                   onClick={handleSend}
                   disabled={loading || !input.trim()}
