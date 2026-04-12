@@ -89,7 +89,8 @@ export default function UserDashboard() {
           })));
         }
       } catch (err) {
-      console.log('Using default pricing');
+        console.log('Using default pricing');
+      }
     }
     fetchPlans();
   }, []);
