@@ -13,15 +13,16 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     sourcemap: false,
+    ssr: false,
+    cssMinify: 'lightningcss',
+    minify: 'esbuild',
     rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'flow-vendor': ['@xyflow/react'],
-          'store-vendor': ['zustand'],
-        },
-      },
+      external: [],
+      treeshake: true,
     },
+  },
+  esbuild: {
+    platform: 'browser',
   },
   server: {
     port: 5173,
