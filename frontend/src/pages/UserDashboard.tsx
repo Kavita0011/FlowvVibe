@@ -1,7 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
+import type { PRD } from '../types';
 import { cn } from '../utils/cn';
+
+const planFeatures: Record<string, string[]> = {
+  'free': ['1 Chatbot', '50 Conversations/month', 'Basic Analytics', 'Email Support'],
+  'starter': ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
+  'pro': ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
+  'enterprise': ['Unlimited Chatbots', 'All Integrations', 'Dedicated Support', 'Custom Development', 'SLA Guarantee', 'White Label']
+};
 import { 
   Bot, ArrowLeft, Plus, Settings, CreditCard, Users, MessageSquare,
   TrendingUp, Calendar, Clock, LogOut, Copy, ExternalLink, MoreVertical,
@@ -31,16 +39,23 @@ const subscriptionPlans = [
     popular: false
   },
   { 
+    id: 'starter', 
+    name: 'Starter', 
+    price: 999, 
+    features: ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
+    popular: false
+  },
+  { 
     id: 'pro', 
     name: 'Pro', 
-    price: 499, 
-    features: ['5 Chatbots', 'Unlimited Conversations', 'Advanced Analytics', 'Priority Support', 'Custom Branding', 'API Access'],
+    price: 2499, 
+    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
     popular: true
   },
   { 
     id: 'enterprise', 
     name: 'Enterprise', 
-    price: 4999, 
+    price: 9999, 
     features: ['Unlimited Chatbots', 'All Integrations', 'Dedicated Support', 'Custom Development', 'SLA Guarantee', 'White Label'],
     popular: false
   }
@@ -48,10 +63,28 @@ const subscriptionPlans = [
 
 export default function UserDashboard() {
   const navigate = useNavigate();
-  const { user, logout, payments, chatbots } = useChatbotStore();
+  const { user, logout, payments, chatbots, setPRD } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>([]);
   const upgradeClicked = () => navigate('/pricing');
+
+  useEffect(() => {
+    fetch('http://localhost:3001/api/psadmin/pricing')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setSubscriptionPlans(data.map((plan: any) => ({
+            id: plan.id,
+            name: plan.name,
+            price: plan.price,
+            features: planFeatures[plan.id] || [],
+            popular: plan.id === 'pro'
+          })));
+        }
+      })
+      .catch(() => console.log('Using fallback pricing'));
+  }, []);
 
   const userPayments = payments.filter(p => p.userId === user?.id);
   const userChatbots = chatbots.filter(c => c.userId === user?.id);
@@ -158,7 +191,19 @@ export default function UserDashboard() {
               <div className="flex items-center justify-between mb-8">
                 <h1 className="text-2xl font-bold text-white">My Chatbots</h1>
                 <button 
-                  onClick={() => navigate('/prd')}
+                  onClick={() => {
+                    const newPRD: PRD = {
+                      companyName: '',
+                      industry: '',
+                      services: [],
+                      targetAudience: '',
+                      tone: 'friendly',
+                      faq: [],
+                      escalationRules: ''
+                    };
+                    setPRD(newPRD);
+                    navigate('/prd');
+                  }}
                   className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 transition-colors"
                 >
                   <Plus className="w-5 h-5" />
@@ -209,7 +254,19 @@ export default function UserDashboard() {
                 <h3 className="text-white font-semibold mb-4">Quick Actions</h3>
                 <div className="grid md:grid-cols-4 gap-4">
                   {[
-                    { label: 'Create Bot', action: () => navigate('/prd'), icon: Plus },
+                    { label: 'Create Bot', action: () => {
+                      const newPRD: PRD = {
+                        companyName: '',
+                        industry: '',
+                        services: [],
+                        targetAudience: '',
+                        tone: 'friendly',
+                        faq: [],
+                        escalationRules: ''
+                      };
+                      setPRD(newPRD);
+                      navigate('/prd');
+                    }, icon: Plus },
                     { label: 'View Analytics', action: () => {}, icon: TrendingUp },
                     { label: 'Export Data', action: () => {}, icon: Copy },
                     { label: 'Get Help', action: () => {}, icon: MessageSquare }
@@ -460,6 +517,7 @@ onClick={upgradeClicked}
                     ))}
                   </ul>
                   <button 
+                    onClick={() => navigate('/payment', { state: { plan: plan.id, addons: [], total: plan.price * 1 } })}
                     className={cn(
                       "w-full py-3 rounded-lg font-medium transition-colors",
                       plan.popular 
@@ -467,18 +525,12 @@ onClick={upgradeClicked}
                         : "bg-slate-600 text-white hover:bg-slate-500"
                     )}
                   >
-                    {plan.price === 0 ? 'Current Plan' : 'Select Plan'}
+                    {plan.price === 0 ? 'Current Plan' : `Buy for ₹${plan.price}`}
                   </button>
                 </div>
               ))}
             </div>
-            <div className="p-6 border-t border-slate-700">
-              <div className="bg-slate-700/50 rounded-xl p-4">
-                <p className="text-slate-400 text-sm mb-2">Payment Details (UPI/Bank Transfer):</p>
-                <p className="text-white font-mono text-sm">UPI: flowvibe@yesbank</p>
-                <p className="text-white font-mono text-sm">Bank: SBI - 45065191325 (IFSC: SBIN0004633)</p>
-              </div>
-            </div>
+            
           </div>
         </div>
       )}

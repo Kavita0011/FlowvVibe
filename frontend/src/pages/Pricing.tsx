@@ -1,57 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Sparkles, Shield, Clock } from 'lucide-react';
 
-const plans = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: 0,
-    originalPrice: 0,
-    period: 'forever',
-    description: 'Perfect for testing',
-    features: ['1 Chatbot', '50 Conversations', 'Basic Widget', 'All Flow Features'],
-    validFor: 'Forever'
-  },
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 999,
-    originalPrice: 1999,
-    period: 'one-time',
-    description: 'One-time payment',
-    features: ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
-    popular: false,
-    validFor: 'Lifetime'
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: 2499,
-    originalPrice: 4999,
-    period: 'one-time',
-    description: 'Most Popular',
-    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
-    popular: true,
-    isOnSale: true,
-    saleTitle: 'Limited Offer',
-    validFor: 'Lifetime'
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: 9999,
-    originalPrice: 19999,
-    period: 'one-time',
-    description: 'For large teams',
-    features: ['Unlimited Chatbots', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee', 'White Label', 'API Access'],
-    popular: false,
-    isOnSale: true,
-    saleTitle: 'Limited Offer',
-    validFor: 'Lifetime'
-  }
-];
+const planFeatures: Record<string, string[]> = {
+  'free': ['1 Chatbot', '50 Conversations', 'Basic Widget', 'All Flow Features'],
+  'starter': ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
+  'pro': ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
+  'enterprise': ['Unlimited Chatbots', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee', 'White Label', 'API Access']
+};
 
 const addons = [
   { id: 'bookings', name: 'Booking System', price: 499, description: 'Appointment scheduling & calendar integration', icon: '📅', features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'], oneTime: true },
@@ -65,9 +22,33 @@ const addons = [
 export default function Pricing() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useChatbotStore();
+  const [plans, setPlans] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi'>('card');
+
+  useEffect(() => {
+    fetch('http://localhost:3001/api/psadmin/pricing')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setPlans(data.map((plan: any) => ({
+            id: plan.id,
+            name: plan.name,
+            price: plan.price,
+            originalPrice: plan.originalPrice,
+            period: plan.period,
+            description: plan.description || '',
+            features: planFeatures[plan.id] || [],
+            validFor: plan.period === 'forever' ? 'Forever' : 'Lifetime',
+            isOnSale: plan.isOnSale,
+            saleTitle: plan.saleReason || 'Sale',
+            popular: plan.id === 'pro'
+          })));
+        }
+      })
+      .catch(() => console.log('Using fallback pricing'));
+  }, []);
   const [upiId, setUpiId] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -126,8 +107,8 @@ export default function Pricing() {
               <p className="text-cyan-400 text-sm mb-4">{plan.validFor}</p>
               <p className="text-slate-400 text-sm mb-4">{plan.description}</p>
               <ul className="space-y-3 mb-6">{plan.features.map((feature, i) => (<li key={i} className="flex items-center gap-2 text-slate-300 text-sm"><Check className="w-4 h-4 text-green-400 flex-shrink-0" />{feature}</li>))}</ul>
-              <button onClick={() => setSelectedPlan(plan.id)} disabled={plan.price === 0} className={`w-full py-3 rounded-xl font-medium transition-all ${plan.popular ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white hover:from-cyan-400 hover:to-purple-500' : 'border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20'} disabled:opacity-50`}>
-                {plan.price === 0 ? 'Current Plan' : 'Select Plan'}
+              <button onClick={() => navigate('/payment', { state: { plan: plan.id, addons: selectedAddons, total: totalPrice } })} disabled={plan.price === 0 || !isAuthenticated} className={`w-full py-3 rounded-xl font-medium transition-all ${plan.popular ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white hover:from-cyan-400 hover:to-purple-500' : 'border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20'} disabled:opacity-50`}>
+                {!isAuthenticated ? 'Login to Buy' : plan.price === 0 ? 'Current Plan' : 'Buy Now'}
               </button>
             </div>
           ))}

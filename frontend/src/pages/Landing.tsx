@@ -58,7 +58,7 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
-    price: '₹499',
+    price: '₹11',
     period: '/month',
     description: 'For growing businesses',
     features: ['Unlimited chatbots', '10,000 messages/month', 'All channels', 'Lead capture', 'Analytics', 'Priority support'],
@@ -81,6 +81,22 @@ const faqData = [
   { q: 'Can I integrate with my existing systems?', a: 'Yes! We support API integrations with CRM, helpdesk, and other tools.' },
   { q: 'Is there a free trial?', a: 'Yes, the Starter plan is free forever with no credit card required.' },
   { q: 'What channels are supported?', a: 'We support Website widgets, WhatsApp, Telegram, Slack, Instagram, and Facebook Messenger.' }
+];
+
+const comparisonData = [
+  { feature: 'Pricing Model', flowvibe: '₹0-9999/lifetime', botpress: '$99/mo', voiceflow: '$50-500/mo', tidio: '$39-199/mo', chatbase: '$99/mo', dialogflow: '$60-180/mo' },
+  { feature: 'One-time Pricing', flowvibe: 10, botpress: 4, voiceflow: 3, tidio: 3, chatbase: 4, dialogflow: 3 },
+  { feature: 'No-Code Builder', flowvibe: 9, botpress: 8, voiceflow: 9, tidio: 9, chatbase: 9, dialogflow: 6 },
+  { feature: 'AI/LLM Integration', flowvibe: 8, botpress: 10, voiceflow: 10, tidio: 7, chatbase: 8, dialogflow: 10 },
+  { feature: 'Visual Flow Builder', flowvibe: 9, botpress: 9, voiceflow: 10, tidio: 8, chatbase: 6, dialogflow: 6 },
+  { feature: 'Multi-Channel Support', flowvibe: 8, botpress: 9, voiceflow: 9, tidio: 9, chatbase: 7, dialogflow: 8 },
+  { feature: 'Indian Payment Gateway', flowvibe: 10, botpress: 2, voiceflow: 3, tidio: 4, chatbase: 3, dialogflow: 2 },
+  { feature: 'Free Plan Available', flowvibe: 10, botpress: 7, voiceflow: 6, tidio: 5, chatbase: 6, dialogflow: 5 },
+  { feature: 'Easy Setup', flowvibe: 9, botpress: 6, voiceflow: 7, tidio: 9, chatbase: 9, dialogflow: 5 },
+  { feature: 'Lead Generation', flowvibe: 9, botpress: 8, voiceflow: 9, tidio: 9, chatbase: 8, dialogflow: 7 },
+  { feature: 'Analytics Dashboard', flowvibe: 8, botpress: 9, voiceflow: 9, tidio: 8, chatbase: 7, dialogflow: 8 },
+  { feature: 'Custom Branding', flowvibe: 8, botpress: 7, voiceflow: 8, tidio: 6, chatbase: 5, dialogflow: 5 },
+  { feature: 'Export Widget', flowvibe: 9, botpress: 6, voiceflow: 7, tidio: 5, chatbase: 4, dialogflow: 4 }
 ];
 
 export default function Landing() {
@@ -323,6 +339,41 @@ export default function Landing() {
                 <p className="text-slate-400 text-sm">UPI, Bank Transfer, Credit/Debit Cards available</p>
               </div>
             </div>
+          </div>
+
+          {/* Comparison Table */}
+          <div className="mt-12">
+            <h2 className="text-3xl font-bold text-white text-center mb-2">How We Compare</h2>
+            <p className="text-slate-400 text-center mb-8">Rated out of 10 against top competitors</p>
+            <div className="overflow-x-auto">
+              <table className="w-full bg-slate-800 rounded-xl border border-slate-700">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="px-4 py-3 text-left text-slate-400 text-sm">Feature</th>
+                    <th className="px-4 py-3 text-cyan-400 text-sm font-bold">FlowvVibe</th>
+                    <th className="px-4 py-3 text-slate-400 text-sm">Botpress</th>
+                    <th className="px-4 py-3 text-slate-400 text-sm">Voiceflow</th>
+                    <th className="px-4 py-3 text-slate-400 text-sm">Tidio</th>
+                    <th className="px-4 py-3 text-slate-400 text-sm">Chatbase</th>
+                    <th className="px-4 py-3 text-slate-400 text-sm">Dialogflow</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonData.map((row, i) => (
+                    <tr key={i} className={cn("border-b border-slate-700/50", row.feature === 'Pricing Model' && "bg-slate-700/30")}>
+                      <td className="px-4 py-3 text-white text-sm font-medium">{row.feature}</td>
+                      <td className="px-4 py-3 text-cyan-400 font-bold">{row.flowvibe}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.botpress}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.voiceflow}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.tidio}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.chatbase}</td>
+                      <td className="px-4 py-3 text-slate-300">{row.dialogflow}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-slate-500 text-xs text-center mt-4">* Based on 2025-2026 platform reviews and user feedback</p>
           </div>
         </div>
       )}

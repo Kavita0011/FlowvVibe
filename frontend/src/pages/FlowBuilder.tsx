@@ -75,7 +75,8 @@ const defaultNodes: Node[] = [
 
 export default function FlowBuilder() {
   const navigate = useNavigate();
-  const { currentChatbot, setFlowData } = useChatbotStore();
+  const { currentChatbot, setFlowData, user } = useChatbotStore();
+  const isPro = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -219,18 +220,25 @@ export default function FlowBuilder() {
               <div key={category}>
                 <h3 className="text-xs font-medium text-slate-400 uppercase mb-2">{category}</h3>
                 <div className="space-y-2">
-                  {items.map((item) => (
-                    <div
-                      key={item.type}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, item.type)}
-                      onDragEnd={onDragEnd}
-                      className="flex items-center gap-3 p-3 bg-slate-700 rounded-lg cursor-grab hover:bg-slate-600 transition-colors"
-                    >
-                      <item.icon className="w-4 h-4 text-cyan-400" />
-                      <span className="text-white text-sm">{item.label}</span>
-                    </div>
-                  ))}
+                  {items.map((item) => {
+                    const isPremium = category === 'Premium';
+                    return (
+                      <div
+                        key={item.type}
+                        draggable={!isPremium || isPro}
+                        onDragStart={(e) => !isPremium || isPro ? onDragStart(e, item.type) : undefined}
+                        onDragEnd={onDragEnd}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg cursor-grab transition-colors",
+                          isPremium && !isPro ? "bg-slate-800/50 cursor-not-allowed opacity-50" : "bg-slate-700 hover:bg-slate-600"
+                        )}
+                      >
+                        <item.icon className={cn("w-4 h-4", isPremium && !isPro ? "text-slate-500" : "text-cyan-400")} />
+                        <span className={cn("text-sm", isPremium && !isPro ? "text-slate-500" : "text-white")}>{item.label}</span>
+                        {isPremium && !isPro && <span className="ml-auto text-xs text-slate-500">PRO</span>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}

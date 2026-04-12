@@ -1,0 +1,6 @@
+[
+  {"id": "starter", "name": "Starter", "minUsers": 1, "maxUsers": 5, "pricePerUser": 399},
+  {"id": "team", "name": "Team", "minUsers": 6, "maxUsers": 20, "pricePerUser": 349},
+  {"id": "business", "name": "Business", "minUsers": 21, "maxUsers": 50, "pricePerUser": 299},
+  {"id": "enterprise", "name": "Enterprise", "minUsers": 51, "maxUsers": 1000, "pricePerUser": 249}
+]

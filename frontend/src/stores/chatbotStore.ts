@@ -37,6 +37,7 @@ interface ChatbotState {
   setCurrentChatbot: (chatbot: Chatbot | null) => void;
   
   setPRD: (prd: PRD | null) => void;
+  clearPRD: () => void;
   updatePRD: (updates: Partial<PRD>) => void;
   
   setFlowData: (flow: FlowData) => void;
@@ -138,6 +139,7 @@ export const useChatbotStore = create<ChatbotState>()(
       })),
       
       setPRD: (prd) => set({ prd }),
+      clearPRD: () => set({ prd: null }),
       updatePRD: (updates) => set(state => ({ prd: state.prd ? { ...state.prd, ...updates } : null })),
       
       setFlowData: (flow) => set(state => ({ currentChatbot: state.currentChatbot ? { ...state.currentChatbot, flow } : null })),

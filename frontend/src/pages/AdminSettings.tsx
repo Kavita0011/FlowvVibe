@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { cn } from '../utils/cn';
@@ -54,6 +54,79 @@ export default function AdminSettings() {
   const [editingPricing, setEditingPricing] = useState<string | null>(null);
   const defaultPricing: typeof pricingPlans[number] = { id: '', name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false };
   const [customPrices, setCustomPrices] = useState<typeof pricingPlans>(pricingPlans);
+  const PSADMIN_BASE = 'http://localhost:3001/api/psadmin';
+  const [backendLoading, setBackendLoading] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const fetchPricingFromBackend = async () => {
+    try {
+      setBackendLoading(true);
+      const res = await fetch(`${PSADMIN_BASE}/pricing`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setCustomPrices(data);
+      } else {
+        setBackendError('Failed to load pricing from PSAdmin');
+      }
+    } catch (e) {
+      console.error(e);
+      setBackendError('Failed to load pricing from PSAdmin');
+    } finally {
+      setBackendLoading(false);
+    }
+  };
+  const fetchTiersFromBackend = async () => {
+    try {
+      const res = await fetch(`${PSADMIN_BASE}/tiers`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setCustomTiersList(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  const savePricingToBackend = async () => {
+    try {
+      const res = await fetch(`${PSADMIN_BASE}/pricing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pricing: customPrices })
+      });
+      if (res.ok) {
+        await fetchPricingFromBackend();
+        alert('Pricing saved to PSAdmin');
+      } else {
+        const err = await res.json();
+        alert('Error saving pricing: ' + (err?.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Error saving pricing', e);
+    }
+  };
+  const saveTiersToBackend = async () => {
+    try {
+      const res = await fetch(`${PSADMIN_BASE}/tiers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tiers: customTiersList })
+      });
+      if (res.ok) {
+        await fetchTiersFromBackend();
+        alert('Tiers saved to PSAdmin');
+      } else {
+        const err = await res.json();
+        alert('Error saving tiers: ' + (err?.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('Error saving tiers', e);
+    }
+  };
+  // Load initial data from PSAdmin on mount
+  useEffect(() => {
+    fetchPricingFromBackend();
+    fetchTiersFromBackend();
+    // eslint-disable-next-line
+  }, []);
   
   // Form states
   const [editUserForm, setEditUserForm] = useState<any>({});
