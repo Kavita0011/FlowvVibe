@@ -88,8 +88,7 @@ export default function UserDashboard() {
             popular: plan.id === 'pro'
           })));
         }
-      }
-    } catch (err) {
+      } catch (err) {
       console.log('Using default pricing');
     }
     fetchPlans();

@@ -14,8 +14,6 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     ssr: false,
-    cssMinify: 'lightningcss',
-    minify: 'esbuild',
     rollupOptions: {
       external: [],
       treeshake: true,
