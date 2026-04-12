@@ -1,0 +1,31 @@
+name = "flowvibe-api"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Environment variables (set in Cloudflare dashboard)
+[vars]
+ENVIRONMENT = "production"
+
+# KV Namespace for caching (optional)
+[[kv_namespaces]]
+binding = "PRICING"
+id = "your-pricing-kv-id"
+
+[[kv_namespaces]]
+binding = "TIERS"
+id = "your-tiers-kv-id"
+
+# D1 Database binding (optional - for future use)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "flowvibe"
+# database_id = "your-d1-database-id"
+
+# Development configuration
+[env.dev]
+name = "flowvibe-api-dev"
+
+# Production configuration  
+[env.production]
+name = "flowvibe-api"
+triggers = { crons = [] }

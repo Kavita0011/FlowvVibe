@@ -1,0 +1,20 @@
+name = "FlowvVibe"
+compatibility_date = "2024-01-01"
+
+# Build settings
+build_command = "npm run build"
+build_output_dir = "dist"
+
+# Redirect all requests to index.html for SPA
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+
+# Headers
+[[headers]]
+for = "/*"
+[headers.values]
+X-Frame-Options = "DENY"
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "strict-origin-when-cross-origin"
