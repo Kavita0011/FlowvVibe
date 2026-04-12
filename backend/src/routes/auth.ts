@@ -51,6 +51,9 @@ router.post('/register', async (req, res) => {
 
 // Login
 router.post('/login', async (req, res) => {
+  const clientIP = req.ip || req.socket.remoteAddress || 'unknown';
+  console.log(`Login attempt from ${clientIP} for ${req.body.email}`);
+  
   try {
     const { email, password } = req.body;
     
@@ -77,6 +80,15 @@ router.post('/login', async (req, res) => {
     await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
     const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Set HttpOnly cookie for token
+    res.cookie('flowvibe_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    });
 
     res.json({
       token,

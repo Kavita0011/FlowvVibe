@@ -11,12 +11,24 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    minify: 'esbuild',
+    minify: 'terser',
     sourcemap: false,
     ssr: false,
     rollupOptions: {
-      external: [],
-      treeshake: true,
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-flow': ['@xyflow/react'],
+          'vendor-state': ['zustand'],
+          'vendor-ui': ['lucide-react'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
+    terserOptions: {
+      compress: {
+        drop_console: true,
+      },
     },
   },
   esbuild: {
@@ -32,7 +44,7 @@ export default defineConfig({
     host: '0.0.0.0',
   },
   define: {
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://amkstseqvrazqlxqahjx.supabase.co'),
-    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wcHN5eHFsaWhtZHNicndseWd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5NDY1OTAsImV4cCI6MjA5MTUyMjU5MH0.i397B6vTmMsuOZ0ZOr-DzoTuTqmuFJjenJn4txBEiTQ'),
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
   },
 })
