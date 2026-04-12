@@ -27,14 +27,14 @@ export default defineConfig({
     port: 5173,
     host: '0.0.0.0',
     strictPort: false,
-    hmr: {
-      overlay: false,
-      clientPort: 5173
-    },
     cors: true,
-    fs: {
-      allow: ['.', '../..']
-    }
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_URL || 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      },
+    },
   },
   preview: {
     port: 4173,
@@ -43,9 +43,5 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', 'zustand', '@xyflow/react'],
-    exclude: []
   },
-  css: {
-    devSourcemap: false
-  }
 })
