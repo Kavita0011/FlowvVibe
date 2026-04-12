@@ -143,7 +143,7 @@ const TEMPLATES: Template[] = [
 export default function Integrations() {
   const navigate = useNavigate();
   const { currentChatbot } = useChatbotStore();
-  const [activeTab, setActiveTab] = useState<'channels' | 'templates' | 'knowledge' | 'handoff' | 'testing'>('channels');
+  const [activeTab, setActiveTab] = useState<'channels' | 'templates' | 'knowledge' | 'handoff' | 'testing' | 'calendar'>('channels');
   const [channels, setChannels] = useState<ChannelConfig[]>([
     { id: 'web', type: 'web', name: 'Web Widget', config: { embedCode: '' }, connected: true, status: 'active' }
   ]);
@@ -153,6 +153,8 @@ export default function Integrations() {
   const [newUrl, setNewUrl] = useState('');
   const [handoffEnabled, setHandoffEnabled] = useState(true);
   const [activeAgents, setActiveAgents] = useState(3);
+  const [calendarProvider, setCalendarProvider] = useState<'google' | 'calendly' | null>(null);
+  const [calendarConfig, setCalendarConfig] = useState({ calendarId: '', webhookUrl: '' });
 
   const handleConnect = (channelId: string) => {
     const channel = CHANNELS.find(c => c.id === channelId);
@@ -250,7 +252,8 @@ export default function Integrations() {
             { id: 'templates', label: 'Templates', icon: FileText },
             { id: 'knowledge', label: 'Knowledge Base', icon: Database },
             { id: 'handoff', label: 'Human Handoff', icon: Users },
-            { id: 'testing', label: 'A/B Testing', icon: BarChart3 }
+            { id: 'testing', label: 'A/B Testing', icon: BarChart3 },
+            { id: 'calendar', label: 'Calendar', icon: Calendar }
           ].map(tab => (
             <button
               key={tab.id}
@@ -491,6 +494,123 @@ export default function Integrations() {
               <button className="mt-4 flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
                 <Plus className="w-4 h-4" /> Add scoring rule
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Calendar Tab */}
+        {activeTab === 'calendar' && (
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div 
+                onClick={() => setCalendarProvider('google')}
+                className={`bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-cyan-500 transition-colors cursor-pointer ${calendarProvider === 'google' ? 'border-cyan-500' : ''}`}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center">
+                    <Calendar className="w-6 h-6 text-slate-800" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium">Google Calendar</h3>
+                    <p className="text-slate-400 text-sm">Sync with Google Calendar</p>
+                  </div>
+                </div>
+                <button className="w-full py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 text-sm">
+                  Connect Google Calendar
+                </button>
+              </div>
+
+              <div 
+                onClick={() => setCalendarProvider('calendly')}
+                className={`bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-cyan-500 transition-colors cursor-pointer ${calendarProvider === 'calendly' ? 'border-cyan-500' : ''}`}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <Calendar className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium">Calendly</h3>
+                    <p className="text-slate-400 text-sm">Connect Calendly scheduling</p>
+                  </div>
+                </div>
+                <button className="w-full py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 text-sm">
+                  Connect Calendly
+                </button>
+              </div>
+            </div>
+
+            {calendarProvider && (
+              <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                <h3 className="text-lg font-semibold text-white mb-4">
+                  {calendarProvider === 'google' ? 'Google Calendar Settings' : 'Calendly Settings'}
+                </h3>
+                {calendarProvider === 'google' ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">Calendar ID</label>
+                      <input
+                        type="text"
+                        value={calendarConfig.calendarId}
+                        onChange={(e) => setCalendarConfig({ ...calendarConfig, calendarId: e.target.value })}
+                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                        placeholder="your-calendar-id@group.calendar.google.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">Webhook URL (for notifications)</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={`https://flowvibe.app/webhooks/calendar/${currentChatbot?.id}`}
+                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-400"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">Calendly URL</label>
+                      <input
+                        type="url"
+                        value={calendarConfig.calendarId}
+                        onChange={(e) => setCalendarConfig({ ...calendarConfig, calendarId: e.target.value })}
+                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                        placeholder="https://calendly.com/your-username"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">API Webhook</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={`https://flowvibe.app/webhooks/calendly/${currentChatbot?.id}`}
+                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-400"
+                      />
+                    </div>
+                  </div>
+                )}
+                <button className="mt-4 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 text-sm">
+                  Save & Enable Booking
+                </button>
+              </div>
+            )}
+
+            <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+              <h3 className="text-lg font-semibold text-white mb-4">Booking Widget Preview</h3>
+              <div className="bg-slate-900 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Calendar className="w-5 h-5 text-cyan-400" />
+                  <span className="text-white font-medium">Schedule a Consultation</span>
+                </div>
+                <p className="text-slate-400 text-sm mb-3">Select a time that works for you:</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {['9:00 AM', '10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM', '4:00 PM'].map(time => (
+                    <button key={time} className="py-2 bg-slate-700 text-white text-sm rounded hover:bg-cyan-500">
+                      {time}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
