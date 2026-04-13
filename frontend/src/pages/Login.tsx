@@ -23,11 +23,26 @@ export default function Login() {
       return;
     }
 
+    // Check for saved admin credentials
+    const savedCreds = localStorage.getItem('adminCredentials');
+    let adminEmail = 'devappkavita@gmail.com';
+    let adminPass = 'kavitabisht2598@sbi';
+    
+    if (savedCreds) {
+      try {
+        const parsed = JSON.parse(savedCreds);
+        adminEmail = parsed.email || adminEmail;
+        adminPass = parsed.password || adminPass;
+      } catch {
+        // Use defaults if parse fails
+      }
+    }
+    
     // Demo mode - admin login
-    if (email === 'devappkavita@gmail.com' && password === 'kavitabisht2598@sbi') {
+    if (email === adminEmail && password === adminPass) {
       const adminUser: User = { 
         id: 'admin_001', 
-        email: 'devappkavita@gmail.com', 
+        email: adminEmail, 
         displayName: 'Admin', 
         role: 'admin', 
         subscription: { tier: 'enterprise', status: 'active', startDate: new Date() }, 

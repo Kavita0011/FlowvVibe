@@ -33,19 +33,65 @@ export default function Admin() {
   const { user, setUser } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const adminCredentials = {
-    adminId: 'FV_ADMIN_001',
-    email: 'devappkavita@gmail.com',
-    password: 'kavitabisht2598@sbi',
-    apiKey: 'fv_live_sk_1234567890abcdefghijklmnopqrstuvwxyz',
-    dashboardUrl: 'https://flowvibe.ai/admin'
-  };
+  // Load credentials from localStorage or use defaults
+  const [adminCredentials, setAdminCredentials] = useState(() => {
+    const saved = localStorage.getItem('adminCredentials');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // Fallback to defaults if parse fails
+      }
+    }
+    return {
+      adminId: 'FV_ADMIN_001',
+      email: 'devappkavita@gmail.com',
+      password: 'kavitabisht2598@sbi',
+      apiKey: 'fv_live_sk_1234567890abcdefghijklmnopqrstuvwxyz',
+      dashboardUrl: 'https://flowvibe.ai/admin'
+    };
+  });
+
+  // Editable copy of credentials
+  const [editableCredentials, setEditableCredentials] = useState(adminCredentials);
 
   const handleCopyCredentials = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleEdit = () => {
+    setEditableCredentials({ ...adminCredentials });
+    setIsEditing(true);
+    setSaveSuccess(false);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditableCredentials({ ...adminCredentials });
+  };
+
+  const handleSave = () => {
+    // Validate required fields
+    if (!editableCredentials.email || !editableCredentials.password) {
+      alert('Email and password are required');
+      return;
+    }
+    
+    // Save to state and localStorage
+    setAdminCredentials({ ...editableCredentials });
+    localStorage.setItem('adminCredentials', JSON.stringify(editableCredentials));
+    setIsEditing(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleChange = (field: string, value: string) => {
+    setEditableCredentials(prev => ({ ...prev, [field]: value }));
   };
 
   const isAdmin = user?.role === 'admin' || user?.email?.includes('admin');
@@ -185,7 +231,41 @@ export default function Admin() {
 
           {activeTab === 'settings' && (
             <>
-              <h1 className="text-2xl font-bold text-white mb-8">Admin Credentials</h1>
+              <div className="flex items-center justify-between mb-8">
+                <h1 className="text-2xl font-bold text-white">Admin Credentials</h1>
+                <div className="flex items-center gap-3">
+                  {saveSuccess && (
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Saved successfully!
+                    </span>
+                  )}
+                  {!isEditing ? (
+                    <button
+                      onClick={handleEdit}
+                      className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg transition-colors"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Edit Credentials
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCancel}
+                        className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSave}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded-lg transition-colors"
+                      >
+                        <Check className="w-4 h-4" />
+                        Save Changes
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
               
               <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -198,9 +278,15 @@ export default function Admin() {
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        value={adminCredentials.adminId}
-                        readOnly
-                        className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                        value={isEditing ? editableCredentials.adminId : adminCredentials.adminId}
+                        onChange={(e) => handleChange('adminId', e.target.value)}
+                        readOnly={!isEditing}
+                        className={cn(
+                          "flex-1 px-4 py-3 border rounded-lg text-white",
+                          isEditing 
+                            ? "bg-slate-600 border-slate-500 focus:border-cyan-500 focus:outline-none" 
+                            : "bg-slate-700 border-slate-600"
+                        )}
                       />
                       <button 
                         onClick={() => handleCopyCredentials(adminCredentials.adminId)}
@@ -211,21 +297,33 @@ export default function Admin() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-2">Admin Email</label>
+                    <label className="block text-slate-400 mb-2">Admin Email *</label>
                     <input
-                      type="text"
-                      value={adminCredentials.email}
-                      readOnly
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      type="email"
+                      value={isEditing ? editableCredentials.email : adminCredentials.email}
+                      onChange={(e) => handleChange('email', e.target.value)}
+                      readOnly={!isEditing}
+                      className={cn(
+                        "w-full px-4 py-3 border rounded-lg text-white",
+                        isEditing 
+                          ? "bg-slate-600 border-slate-500 focus:border-cyan-500 focus:outline-none" 
+                          : "bg-slate-700 border-slate-600"
+                      )}
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-2">Password</label>
+                    <label className="block text-slate-400 mb-2">Password *</label>
                     <input
-                      type="password"
-                      value={adminCredentials.password}
-                      readOnly
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      type={isEditing ? "text" : "password"}
+                      value={isEditing ? editableCredentials.password : adminCredentials.password}
+                      onChange={(e) => handleChange('password', e.target.value)}
+                      readOnly={!isEditing}
+                      className={cn(
+                        "w-full px-4 py-3 border rounded-lg text-white",
+                        isEditing 
+                          ? "bg-slate-600 border-slate-500 focus:border-cyan-500 focus:outline-none" 
+                          : "bg-slate-700 border-slate-600"
+                      )}
                     />
                   </div>
                 </div>
@@ -239,9 +337,15 @@ export default function Admin() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={adminCredentials.apiKey}
-                    readOnly
-                    className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white font-mono text-sm"
+                    value={isEditing ? editableCredentials.apiKey : adminCredentials.apiKey}
+                    onChange={(e) => handleChange('apiKey', e.target.value)}
+                    readOnly={!isEditing}
+                    className={cn(
+                      "flex-1 px-4 py-3 border rounded-lg text-white font-mono text-sm",
+                      isEditing 
+                        ? "bg-slate-600 border-slate-500 focus:border-cyan-500 focus:outline-none" 
+                        : "bg-slate-700 border-slate-600"
+                    )}
                   />
                   <button 
                     onClick={() => handleCopyCredentials(adminCredentials.apiKey)}
@@ -263,9 +367,15 @@ export default function Admin() {
                     <label className="block text-slate-400 mb-2">Dashboard URL</label>
                     <input
                       type="text"
-                      value={adminCredentials.dashboardUrl}
-                      readOnly
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      value={isEditing ? editableCredentials.dashboardUrl : adminCredentials.dashboardUrl}
+                      onChange={(e) => handleChange('dashboardUrl', e.target.value)}
+                      readOnly={!isEditing}
+                      className={cn(
+                        "w-full px-4 py-3 border rounded-lg text-white",
+                        isEditing 
+                          ? "bg-slate-600 border-slate-500 focus:border-cyan-500 focus:outline-none" 
+                          : "bg-slate-700 border-slate-600"
+                      )}
                     />
                   </div>
 <div>
