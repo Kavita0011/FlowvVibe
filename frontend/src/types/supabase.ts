@@ -332,6 +332,61 @@ export interface Database {
           updated_at?: string
         }
       }
+      payment_methods: {
+        Row: {
+          id: string
+          method_name: string
+          details: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          method_name: string
+          details: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          method_name?: string
+          details?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      pricing_plans: {
+        Row: {
+          id: string
+          plan_name: string
+          price: number
+          features: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          plan_name: string
+          price: number
+          features: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          plan_name?: string
+          price?: number
+          features?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

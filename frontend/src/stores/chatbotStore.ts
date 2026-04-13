@@ -13,7 +13,15 @@ import {
   signOut,
   getCurrentUser,
   getSession,
-  subscribeToChatbots
+  subscribeToChatbots,
+  fetchPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  fetchPricingPlans,
+  createPricingPlan,
+  updatePricingPlan,
+  deletePricingPlan
 } from '../lib/supabase';
 import type { Database } from '../types/supabase';
 import { 
@@ -108,6 +116,24 @@ interface ChatbotState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
+  
+  // Payment Methods (Admin)
+  paymentMethods: Database['public']['Tables']['payment_methods']['Row'][];
+  loadPaymentMethods: () => Promise<void>;
+  addPaymentMethod: (method: Database['public']['Tables']['payment_methods']['Insert']) => Promise<boolean>;
+  editPaymentMethod: (id: string, updates: Database['public']['Tables']['payment_methods']['Update']) => Promise<boolean>;
+  removePaymentMethod: (id: string) => Promise<boolean>;
+  
+  // Pricing Plans (Admin)
+  pricingPlans: Database['public']['Tables']['pricing_plans']['Row'][];
+  loadPricingPlans: () => Promise<void>;
+  addPricingPlan: (plan: Database['public']['Tables']['pricing_plans']['Insert']) => Promise<boolean>;
+  editPricingPlan: (id: string, updates: Database['public']['Tables']['pricing_plans']['Update']) => Promise<boolean>;
+  removePricingPlan: (id: string) => Promise<boolean>;
+  
+  // Payment Status Gate
+  canAccessCode: () => boolean;
+  getPaymentStatus: () => 'none' | 'pending' | 'success';
 }
 
 // Demo data
@@ -152,6 +178,8 @@ export const useChatbotStore = create<ChatbotState>()(
       prd: null,
       conversations: [],
       currentConversation: null,
+      paymentMethods: [],
+      pricingPlans: [],
       
       login: async (email, password) => {
         set({ isLoading: true, error: null });
@@ -717,7 +745,135 @@ export const useChatbotStore = create<ChatbotState>()(
       
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
-      reset: () => set({ user: null, isAdmin: false, isAuthenticated: false, isLoading: false, error: null, chatbots: [], currentChatbot: null, prd: null })
+      reset: () => set({ user: null, isAdmin: false, isAuthenticated: false, isLoading: false, error: null, chatbots: [], currentChatbot: null, prd: null }),
+      
+      // Payment Methods Management (Admin)
+      loadPaymentMethods: async () => {
+        if (!isSupabaseConfigured() || !supabase) return;
+        const { data, error } = await fetchPaymentMethods();
+        if (error) {
+          console.error('Failed to load payment methods:', error);
+          return;
+        }
+        if (data) set({ paymentMethods: data });
+      },
+      
+      addPaymentMethod: async (method) => {
+        if (!get().isAdmin) return false;
+        const { data, error } = await createPaymentMethod(method);
+        if (error) {
+          set({ error: error.message });
+          return false;
+        }
+        if (data) {
+          set(state => ({ paymentMethods: [...state.paymentMethods, data] }));
+          return true;
+        }
+        return false;
+      },
+      
+      editPaymentMethod: async (id, updates) => {
+        if (!get().isAdmin) return false;
+        const { data, error } = await updatePaymentMethod(id, updates);
+        if (error) {
+          set({ error: error.message });
+          return false;
+        }
+        if (data) {
+          set(state => ({
+            paymentMethods: state.paymentMethods.map(m => m.id === id ? data : m)
+          }));
+          return true;
+        }
+        return false;
+      },
+      
+      removePaymentMethod: async (id) => {
+        if (!get().isAdmin) return false;
+        const { error } = await deletePaymentMethod(id);
+        if (error) {
+          set({ error: error.message });
+          return false;
+        }
+        set(state => ({
+          paymentMethods: state.paymentMethods.filter(m => m.id !== id)
+        }));
+        return true;
+      },
+      
+      // Pricing Plans Management (Admin)
+      loadPricingPlans: async () => {
+        const { data, error } = await fetchPricingPlans(false);
+        if (error) {
+          console.error('Failed to load pricing plans:', error);
+          return;
+        }
+        if (data) set({ pricingPlans: data });
+      },
+      
+      addPricingPlan: async (plan) => {
+        if (!get().isAdmin) return false;
+        const { data, error } = await createPricingPlan(plan);
+        if (error) {
+          set({ error: error.message });
+          return false;
+        }
+        if (data) {
+          set(state => ({ pricingPlans: [...state.pricingPlans, data] }));
+          return true;
+        }
+        return false;
+      },
+      
+      editPricingPlan: async (id, updates) => {
+        if (!get().isAdmin) return false;
+        const { data, error } = await updatePricingPlan(id, updates);
+        if (error) {
+          set({ error: error.message });
+          return false;
+        }
+        if (data) {
+          set(state => ({
+            pricingPlans: state.pricingPlans.map(p => p.id === id ? data : p)
+          }));
+          return true;
+        }
+        return false;
+      },
+      
+      removePricingPlan: async (id) => {
+        if (!get().isAdmin) return false;
+        const { error } = await deletePricingPlan(id);
+        if (error) {
+          set({ error: error.message });
+          return false;
+        }
+        set(state => ({
+          pricingPlans: state.pricingPlans.filter(p => p.id !== id)
+        }));
+        return true;
+      },
+      
+      // Payment Status Gate
+      canAccessCode: () => {
+        const state = get();
+        if (!state.user) return false;
+        // Check payment status from user's payments
+        const hasSuccessfulPayment = state.payments.some(p => 
+          p.userId === state.user?.id && p.status === 'completed'
+        );
+        return hasSuccessfulPayment || state.isAdmin;
+      },
+      
+      getPaymentStatus: () => {
+        const state = get();
+        if (!state.user) return 'none';
+        const payment = state.payments.find(p => p.userId === state.user.id);
+        if (!payment) return 'none';
+        if (payment.status === 'completed') return 'success';
+        if (payment.status === 'pending') return 'pending';
+        return 'none';
+      }
     }),
     { name: 'flowvibe-storage', partialize: (state) => ({ user: state.user, isAdmin: state.isAdmin, isAuthenticated: state.isAuthenticated }) }
   )

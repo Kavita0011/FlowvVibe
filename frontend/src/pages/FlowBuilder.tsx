@@ -568,6 +568,16 @@ export default function FlowBuilder() {
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             onSelectionChange={({ nodes: selected }) => setSelectedNodes(selected.map(n => n.id))}
+            onNodesDelete={(deletedNodes) => {
+              // Sync with database when nodes are deleted
+              if (currentChatbot?.id && deletedNodes.length > 0) {
+                const remainingNodes = nodes.filter(n => !deletedNodes.some(dn => dn.id === n.id));
+                const remainingEdges = edges.filter(e => 
+                  !deletedNodes.some(dn => dn.id === e.source || dn.id === e.target)
+                );
+                setFlowData({ nodes: remainingNodes as any, edges: remainingEdges as any });
+              }
+            }}
             nodeTypes={nodeTypes}
             fitView
             className={cn("transition-all duration-200", isWireframeMode ? "opacity-60" : "")}
