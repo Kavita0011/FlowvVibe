@@ -179,12 +179,6 @@ export default function Login() {
           <p className="text-slate-400 text-center mt-6">
             Don't have an account? <button onClick={() => navigate('/register')} className="text-cyan-400 hover:text-cyan-300">Sign up</button>
           </p>
-
-          <div className="mt-6 p-4 bg-slate-700/30 rounded-xl">
-            <p className="text-slate-500 text-xs text-center mb-2">Demo Accounts:</p>
-            <p className="text-slate-400 text-xs text-center">Admin: devappkavita@gmail.com</p>
-            <p className="text-slate-400 text-xs text-center">Demo: demo@flowvibe.ai / demo123</p>
-          </div>
         </div>
       </div>
     </div>
