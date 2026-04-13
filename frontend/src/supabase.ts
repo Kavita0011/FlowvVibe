@@ -142,10 +142,10 @@ export const supabase = {
     },
   },
   chatbots: {
-    create: async ({ name, industry, description, tone }: { name: string; industry: string; description?: string; tone?: string }) => {
+    create: async ({ name, industry, description, tone, flowData, prd, isPublished }: { name: string; industry: string; description?: string; tone?: string; flowData?: unknown; prd?: unknown; isPublished?: boolean }) => {
       const result = await backendFetch('/api/chatbots', {
         method: 'POST',
-        body: JSON.stringify({ name, industry, description, tone }),
+        body: JSON.stringify({ name, industry, description, tone, flowData, prd, isPublished }),
       });
       if (!result.ok) {
         return { data: null, error: { message: result.body?.error || 'Failed to create chatbot' } };
@@ -156,6 +156,30 @@ export const supabase = {
       const result = await backendFetch('/api/chatbots', { method: 'GET' });
       if (!result.ok) {
         return { data: null, error: { message: result.body?.error || 'Failed to fetch chatbots' } };
+      }
+      return { data: result.body?.data || result.body, error: null };
+    },
+    get: async (id: string) => {
+      const result = await backendFetch(`/api/chatbots/${id}`, { method: 'GET' });
+      if (!result.ok) {
+        return { data: null, error: { message: result.body?.error || 'Failed to fetch chatbot' } };
+      }
+      return { data: result.body, error: null };
+    },
+    update: async (id: string, payload: Record<string, unknown>) => {
+      const result = await backendFetch(`/api/chatbots/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      if (!result.ok) {
+        return { data: null, error: { message: result.body?.error || 'Failed to update chatbot' } };
+      }
+      return { data: result.body, error: null };
+    },
+    delete: async (id: string) => {
+      const result = await backendFetch(`/api/chatbots/${id}`, { method: 'DELETE' });
+      if (!result.ok) {
+        return { data: null, error: { message: result.body?.error || 'Failed to delete chatbot' } };
       }
       return { data: result.body, error: null };
     },

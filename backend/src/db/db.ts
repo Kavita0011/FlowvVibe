@@ -82,10 +82,34 @@ export const updateUser = async (id: string, data: Record<string, unknown>) => {
 };
 
 // ==================== CHATBOT OPERATIONS ====================
-export const createChatbot = async (userId: string, name: string, industry: string) => {
+export const createChatbot = async (
+  userId: string,
+  name: string,
+  industry: string,
+  data: {
+    description?: string;
+    tone?: string;
+    flowData?: unknown;
+    prd?: unknown;
+    isPublished?: boolean;
+    channelConfigs?: unknown;
+  } = {}
+) => {
   const result = await query(
-    'INSERT INTO chatbots(user_id, name, industry) VALUES($1, $2, $3) RETURNING *',
-    [userId, name, industry]
+    `INSERT INTO chatbots(user_id, name, industry, description, tone, flow_data, prd, is_published, channel_configs)
+     VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING *`,
+    [
+      userId,
+      name,
+      industry,
+      data.description || null,
+      data.tone || 'friendly',
+      data.flowData || { nodes: [], edges: [] },
+      data.prd || null,
+      data.isPublished || false,
+      data.channelConfigs || []
+    ]
   );
   return result.rows[0];
 };

@@ -19,6 +19,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { cn } from '../utils/cn';
+import { supabase } from '../supabase';
 import { 
   Bot, ArrowLeft, Save, Play, Download, Upload, 
   Settings, Plus, Trash2, Loader2, MessageSquare, GitBranch, 
@@ -105,7 +106,7 @@ const nodeColors: Record<string, string> = {
 
 export default function FlowBuilder() {
   const navigate = useNavigate();
-  const { currentChatbot, user, setFlowData } = useChatbotStore();
+  const { currentChatbot, chatbots, setChatbots, setCurrentChatbot, user, setFlowData } = useChatbotStore();
   const isPro = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -137,6 +138,7 @@ export default function FlowBuilder() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [customTheme, setCustomTheme] = useState<Record<string, string>>({});
   const [errorBanner, setErrorBanner] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  const [savingBot, setSavingBot] = useState(false);
   const clipboardRef = useRef<Node[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +166,33 @@ export default function FlowBuilder() {
     humanHandoff: (props) => <CustomNode {...props} type="humanHandoff" />,
     zapierWebhook: (props) => <CustomNode {...props} type="zapierWebhook" />,
     crmUpdate: (props) => <CustomNode {...props} type="crmUpdate" />,
+  };
+
+  const saveBot = async (publish = false) => {
+    if (!currentChatbot) {
+      setErrorBanner({ message: 'No bot selected to save.', type: 'error' });
+      return;
+    }
+
+    setSavingBot(true);
+    const result = await supabase.chatbots.update(currentChatbot.id, {
+      name: currentChatbot.name,
+      description: currentChatbot.description,
+      industry: currentChatbot.industry,
+      tone: currentChatbot.tone,
+      flowData: { nodes, edges },
+      isPublished: publish || currentChatbot.published,
+    });
+    setSavingBot(false);
+
+    if (!result.data) {
+      setErrorBanner({ message: result.error?.message || 'Unable to save bot settings.', type: 'error' });
+      return;
+    }
+
+    setCurrentChatbot(result.data as any);
+    setChatbots(chatbots.map((bot) => (bot.id === result.data.id ? result.data : bot)));
+    setErrorBanner({ message: publish ? 'Bot published successfully.' : 'Bot saved successfully.', type: 'success' });
   };
 
   const onConnect = useCallback((connection: Connection) => {

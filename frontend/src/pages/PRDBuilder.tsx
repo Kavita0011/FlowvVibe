@@ -118,8 +118,24 @@ export default function PRDBuilder() {
   const [generating, setGenerating] = useState(false);
   const [newFAQ, setNewFAQ] = useState<FAQ>({ question: '', answer: '' });
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [botName, setBotName] = useState(prd?.companyName || '');
+  const [botDescription, setBotDescription] = useState(prd?.companyDescription || '');
+  const [botTone, setBotTone] = useState(prd?.tone || 'friendly');
+  const [botIndustry, setBotIndustry] = useState(prd?.industry || '');
+  const [botPublished, setBotPublished] = useState(false);
 
   const extendedPRD = prd as ExtendedPRD | null;
+
+  React.useEffect(() => {
+    if (prd) {
+      setBotName(prd.companyName || '');
+      setBotDescription(prd.companyDescription || '');
+      setBotTone(prd.tone || 'friendly');
+      setBotIndustry(prd.industry || '');
+      setBotPublished(false);
+    }
+  }, [prd]);
   
   const industries = Object.keys(industryTemplates);
 
@@ -165,6 +181,43 @@ export default function PRDBuilder() {
       ...prd!,
       commonObjections: [...(extendedPRD.commonObjections || []), obj]
     } as PRD);
+  };
+
+  const createNewChatbot = async (flow: any, publish = false) => {
+    const botNameValue = botName || prd?.companyName || `Chatbot ${Date.now()}`;
+    const result = await supabase.chatbots.create({
+      name: botNameValue,
+      industry: botIndustry || prd?.industry || 'General',
+      description: botDescription || prd?.companyDescription || '',
+      tone: botTone,
+      flowData: flow,
+      prd,
+      isPublished: publish,
+    });
+
+    if (result.error || !result.data) {
+      console.warn('Failed to create chatbot:', result.error?.message);
+      return null;
+    }
+
+    return result.data;
+  };
+
+  const saveDraft = async () => {
+    if (!prd) return;
+    setDraftSaving(true);
+    const flow = { nodes: [], edges: [] };
+    const createdBot = await createNewChatbot(flow, false);
+    setDraftSaving(false);
+
+    if (!createdBot) {
+      alert('Unable to save draft. Please try again.');
+      return;
+    }
+
+    setCurrentChatbot(createdBot as any);
+    setChatbots([...chatbots, createdBot as any]);
+    alert('Draft saved successfully. You can continue editing your bot flow anytime.');
   };
 
   const handleGenerateWithAI = async () => {
@@ -365,6 +418,13 @@ export default function PRDBuilder() {
               )}
               Generate Smart Flow
             </button>
+            <button
+              onClick={saveDraft}
+              disabled={draftSaving || !prd.companyName}
+              className="flex items-center gap-2 px-5 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-all disabled:opacity-50"
+            >
+              {draftSaving ? 'Saving Draft...' : 'Save Draft'}
+            </button>
           </div>
         </div>
       </nav>
@@ -389,6 +449,16 @@ export default function PRDBuilder() {
                   />
                 </div>
                 <div>
+                  <label className="block text-slate-400 mb-2">Bot Name</label>
+                  <input
+                    type="text"
+                    value={botName}
+                    onChange={(e) => setBotName(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="Example: Support AI Bot"
+                  />
+                </div>
+                <div>
                   <label className="block text-slate-400 mb-2">Industry *</label>
                   <select
                     value={prd.industry}
@@ -401,6 +471,28 @@ export default function PRDBuilder() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-slate-400 mb-2">Tone</label>
+                  <select
+                    value={botTone}
+                    onChange={(e) => setBotTone(e.target.value as 'friendly' | 'professional' | 'formal' | 'casual')}
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    {tones.map((tone) => (
+                      <option key={tone.id} value={tone.id}>{tone.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="block text-slate-400 mb-2">Bot Description</label>
+                <textarea
+                  value={botDescription}
+                  onChange={(e) => setBotDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  placeholder="Describe what your bot should do"
+                />
               </div>
             </div>
 
