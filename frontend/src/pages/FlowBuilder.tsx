@@ -14,7 +14,6 @@ import {
   NodeTypes,
   BackgroundVariant,
   Panel,
-  useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -106,10 +105,17 @@ const nodeColors: Record<string, string> = {
 
 export default function FlowBuilder() {
   const navigate = useNavigate();
-  const { currentChatbot, setFlowData, user } = useChatbotStore();
+  const { currentChatbot, user, setFlowData } = useChatbotStore();
   const isPro = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  React.useEffect(() => {
+    if (currentChatbot?.flow?.nodes?.length) {
+      setNodes(currentChatbot.flow.nodes as any);
+      setEdges(currentChatbot.flow.edges as any);
+    }
+  }, [currentChatbot, setNodes, setEdges]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -131,7 +137,6 @@ export default function FlowBuilder() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [customTheme, setCustomTheme] = useState<Record<string, string>>({});
   const [errorBanner, setErrorBanner] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
-  const { fitView, getNodes } = useReactFlow();
   const clipboardRef = useRef<Node[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 

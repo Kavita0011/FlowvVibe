@@ -13,7 +13,6 @@
     "lint": "npx eslint src --ext ts,tsx"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.39.0",
     "@xyflow/react": "12.3.6",
     "clsx": "2.1.1",
     "dompurify": "^3.3.3",

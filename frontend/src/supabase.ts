@@ -8,16 +8,34 @@ if (isProduction && !API_URL) {
   console.error('Missing required VITE_API_URL in production environment');
 }
 
+const AUTH_TOKEN_KEY = 'flowvibe_token';
+
 function buildUrl(path: string) {
   const base = API_URL.replace(/\/$/, '');
   return path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
 }
 
+function getAuthToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function setAuthToken(token: string | null) {
+  if (typeof window === 'undefined') return;
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
 async function backendFetch(path: string, options: RequestInit = {}) {
   const url = buildUrl(path);
+  const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   } as Record<string, string>;
 
   const response = await fetch(url, {
@@ -93,10 +111,12 @@ export const supabase = {
       if (!result.ok) {
         return { data: null, error: { message: result.body?.error || 'Login failed' } };
       }
+      const token = result.body?.token;
+      setAuthToken(token || null);
       return {
         data: {
           user: normalizeUser(result.body.user),
-          session: { access_token: result.body.token },
+          session: { access_token: token },
         },
         error: null,
       };
@@ -110,13 +130,34 @@ export const supabase = {
       if (!result.ok) {
         return { data: null, error: { message: result.body?.error || 'Registration failed' } };
       }
+      const token = result.body?.token;
+      setAuthToken(token || null);
       return {
         data: {
           user: normalizeUser(result.body.user),
-          session: { access_token: result.body.token },
+          session: { access_token: token },
         },
         error: null,
       };
+    },
+  },
+  chatbots: {
+    create: async ({ name, industry, description, tone }: { name: string; industry: string; description?: string; tone?: string }) => {
+      const result = await backendFetch('/api/chatbots', {
+        method: 'POST',
+        body: JSON.stringify({ name, industry, description, tone }),
+      });
+      if (!result.ok) {
+        return { data: null, error: { message: result.body?.error || 'Failed to create chatbot' } };
+      }
+      return { data: result.body, error: null };
+    },
+    list: async () => {
+      const result = await backendFetch('/api/chatbots', { method: 'GET' });
+      if (!result.ok) {
+        return { data: null, error: { message: result.body?.error || 'Failed to fetch chatbots' } };
+      }
+      return { data: result.body, error: null };
     },
   },
   from: (table: string) => createTableClient(table),

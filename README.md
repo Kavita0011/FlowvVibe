@@ -145,6 +145,11 @@ docker-compose up -d --build
 ```
 PORT=3001
 DATABASE_URL=postgresql://flowvibe:flowvibe2024@postgres:5432/flowvibe
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=flowvibe
+DB_USER=postgres
+DB_PASSWORD=your-password
 JWT_SECRET=flowvibe-jwt-secret-2024
 OPENROUTER_API_KEY=
 SLACK_BOT_TOKEN=
@@ -153,6 +158,13 @@ WHATSAPP_TOKEN=
 WHATSAPP_PHONE_ID=
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
+```
+
+> The frontend communicates with your backend API via `VITE_API_URL`. No Supabase client keys are required in frontend runtime for this project.
+
+## Frontend (.env)
+```
+VITE_API_URL=http://localhost:3001
 ```
 
 ## 📱 Running the Application

@@ -7,6 +7,7 @@ import {
   Clock, FileText, Plus, Trash2, Wand2, Loader2, Send,
   Briefcase, Target, Heart, Lightbulb, Zap, Globe, Mail, Phone
 } from 'lucide-react';
+import { supabase } from '../supabase';
 import type { PRD, FAQ } from '../types';
 
 const industryTemplates: Record<string, Partial<PRD>> = {
@@ -112,7 +113,7 @@ interface ExtendedPRD extends PRD {
 
 export default function PRDBuilder() {
   const navigate = useNavigate();
-  const { prd, setPRD, updatePRD, setFlowData, currentChatbot } = useChatbotStore();
+  const { prd, setPRD, updatePRD, setFlowData, currentChatbot, setCurrentChatbot, chatbots, setChatbots, user } = useChatbotStore();
   const [generatedFlow, setGeneratedFlow] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [newFAQ, setNewFAQ] = useState<FAQ>({ question: '', answer: '' });
@@ -223,6 +224,56 @@ export default function PRDBuilder() {
     Return ONLY valid JSON:
     {"nodes": [{"id": "start", "type": "start", "position": {"x": 100, "y": 200}, "data": {"label": "Start", "message": "Welcome!", "companyUSP": []}}, ...], "edges": [...]}`;
 
+    const createNewChatbot = async (flow: any) => {
+      const botName = prd.companyName || `Chatbot ${Date.now()}`;
+      const defaultBot = {
+        id: `bot_${Date.now()}`,
+        userId: user?.id || 'demo_user',
+        name: botName,
+        description: prd.companyDescription || '',
+        industry: prd.industry,
+        targetAudience: prd.targetAudience,
+        tone: prd.tone as 'friendly' | 'professional' | 'formal' | 'casual',
+        flow,
+        published: false,
+        channels: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('flowvibe_token') : null;
+      if (!token) {
+        return defaultBot;
+      }
+
+      const { data, error } = await supabase.chatbots.create({
+        name: botName,
+        industry: prd.industry,
+        description: prd.companyDescription || '',
+        tone: prd.tone,
+      });
+
+      if (error || !data) {
+        console.warn('Backend chatbot creation failed, using local bot fallback.', error?.message);
+        return defaultBot;
+      }
+
+      return {
+        id: data.id,
+        userId: data.user_id || user?.id || 'demo_user',
+        name: data.name || botName,
+        description: data.description || prd.companyDescription || '',
+        industry: data.industry || prd.industry,
+        targetAudience: prd.targetAudience,
+        tone: data.tone || prd.tone as 'friendly' | 'professional' | 'formal' | 'casual',
+        flow,
+        published: data.is_published ?? false,
+        channels: data.channels || [],
+        createdAt: new Date(data.created_at || Date.now()),
+        updatedAt: new Date(data.updated_at || data.created_at || Date.now()),
+      };
+    };
+
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -239,7 +290,9 @@ export default function PRDBuilder() {
       const data = await response.json();
       const flow = JSON.parse(data.choices[0].message.content);
       setGeneratedFlow(JSON.stringify(flow, null, 2));
-      setFlowData(flow);
+      const createdBot = await createNewChatbot(flow);
+      setCurrentChatbot(createdBot as any);
+      setChatbots([...chatbots, createdBot as any]);
     } catch (error) {
       console.error('AI generation failed:', error);
       const fallbackFlow = {
@@ -260,7 +313,9 @@ export default function PRDBuilder() {
         ]
       };
       setGeneratedFlow(JSON.stringify(fallbackFlow, null, 2));
-      setFlowData(fallbackFlow as any);
+      const createdBot = await createNewChatbot(fallbackFlow);
+      setCurrentChatbot(createdBot as any);
+      setChatbots([...chatbots, createdBot as any]);
     } finally {
       setGenerating(false);
       navigate('/flow');
