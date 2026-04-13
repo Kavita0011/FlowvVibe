@@ -16,6 +16,17 @@ import {
   subscribeToChatbots
 } from '../lib/supabase';
 import type { Database } from '../types/supabase';
+import { 
+  validateEmail, 
+  validatePassword, 
+  validateBotName, 
+  validateIndustry,
+  validateDescription,
+  sanitizeInput,
+  validateForm,
+  globalRateLimiter,
+  type ValidationResult 
+} from '../utils/validation';
 
 interface ChatbotState {
   user: User | null;
@@ -170,7 +181,83 @@ export const useChatbotStore = create<ChatbotState>()(
       },
       
       register: async (email, password, displayName) => {
-        const newUser: User = { id: `user_${Date.now()}`, email, displayName, role: 'user', isActive: true, createdAt: new Date(), subscription: { tier: 'free', status: 'active', expiresAt: new Date(Date.now() + 30*24*60*60*1000) } };
+        set({ isLoading: true, error: null });
+        
+        // Rate limiting check
+        const rateCheck = globalRateLimiter.canProceed(`register_${email}`);
+        if (!rateCheck.allowed) {
+          const minutes = Math.ceil((rateCheck.resetTime! - Date.now()) / 60000);
+          set({ error: `Too many attempts. Please try again in ${minutes} minutes.`, isLoading: false });
+          return false;
+        }
+        
+        // Validate email
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.isValid) {
+          set({ error: emailValidation.error, isLoading: false });
+          return false;
+        }
+        
+        // Validate password
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.isValid) {
+          set({ error: passwordValidation.error, isLoading: false });
+          return false;
+        }
+        
+        // Validate display name
+        const nameValidation = validateBotName(displayName);
+        if (!nameValidation.isValid) {
+          set({ error: 'Please enter a valid display name (2-100 characters)', isLoading: false });
+          return false;
+        }
+        
+        // Sanitize inputs
+        const sanitizedEmail = emailValidation.sanitized!;
+        const sanitizedName = sanitizeInput(displayName).trim();
+        
+        // Check if email already exists
+        const existingUser = get().users.find(u => u.email.toLowerCase() === sanitizedEmail.toLowerCase());
+        if (existingUser) {
+          set({ error: 'Email already registered', isLoading: false });
+          return false;
+        }
+        
+        // Record rate limit attempt
+        globalRateLimiter.recordAttempt(`register_${email}`);
+        
+        // If Supabase is configured, use it
+        if (isSupabaseConfigured() && supabase) {
+          const { data, error } = await signUp(sanitizedEmail, password, { display_name: sanitizedName });
+          if (error) {
+            set({ error: error.message, isLoading: false });
+            return false;
+          }
+          if (data?.user) {
+            const newUser: User = {
+              id: data.user.id,
+              email: sanitizedEmail,
+              displayName: sanitizedName,
+              role: 'user',
+              isActive: true,
+              createdAt: new Date(data.user.created_at || Date.now()),
+              subscription: { tier: 'free', status: 'active', expiresAt: new Date(Date.now() + 30*24*60*60*1000) }
+            };
+            set(state => ({ users: [...state.users, newUser], user: newUser, isAuthenticated: true, isLoading: false }));
+            return true;
+          }
+        }
+        
+        // Fallback: Create locally
+        const newUser: User = { 
+          id: `user_${Date.now()}`, 
+          email: sanitizedEmail, 
+          displayName: sanitizedName, 
+          role: 'user', 
+          isActive: true, 
+          createdAt: new Date(), 
+          subscription: { tier: 'free', status: 'active', expiresAt: new Date(Date.now() + 30*24*60*60*1000) } 
+        };
         set(state => ({ users: [...state.users, newUser], user: newUser, isAuthenticated: true, isLoading: false }));
         return true;
       },
@@ -194,14 +281,51 @@ export const useChatbotStore = create<ChatbotState>()(
         const state = get();
         if (!state.user) return null;
         
+        // Validate bot name
+        const nameValidation = validateBotName(botData.name || '');
+        if (!nameValidation.isValid) {
+          set({ error: nameValidation.error });
+          return null;
+        }
+        
+        // Validate industry
+        const industryValidation = validateIndustry(botData.industry || '');
+        if (!industryValidation.isValid) {
+          set({ error: industryValidation.error });
+          return null;
+        }
+        
+        // Validate and sanitize description
+        const descValidation = validateDescription(botData.description || '');
+        if (!descValidation.isValid) {
+          set({ error: descValidation.error });
+          return null;
+        }
+        
+        // Sanitize inputs
+        const sanitizedName = nameValidation.sanitized!;
+        const sanitizedIndustry = industryValidation.sanitized!;
+        const sanitizedDescription = descValidation.sanitized!;
+        const sanitizedTargetAudience = sanitizeInput(botData.targetAudience || '');
+        
+        // Rate limiting
+        const rateCheck = globalRateLimiter.canProceed(`create_bot_${state.user.id}`);
+        if (!rateCheck.allowed) {
+          set({ error: 'Too many bots created. Please try again later.' });
+          return null;
+        }
+        
+        // Record rate limit attempt
+        globalRateLimiter.recordAttempt(`create_bot_${state.user.id}`);
+        
         // If Supabase is configured, save to database
         if (isSupabaseConfigured() && supabase) {
           const dbBot: Database['public']['Tables']['chatbots']['Insert'] = {
             user_id: state.user.id,
-            name: botData.name || 'New Bot',
-            description: botData.description || '',
-            industry: botData.industry || 'General',
-            target_audience: botData.targetAudience || '',
+            name: sanitizedName,
+            description: sanitizedDescription,
+            industry: sanitizedIndustry,
+            target_audience: sanitizedTargetAudience,
             tone: botData.tone || 'friendly',
             flow_data: (botData.flow || { nodes: [], edges: [] }) as any,
             is_published: false,
@@ -252,10 +376,10 @@ export const useChatbotStore = create<ChatbotState>()(
         const newBot: Chatbot = {
           id: `bot_${Date.now()}`,
           userId: state.user.id,
-          name: botData.name || 'New Bot',
-          description: botData.description || '',
-          industry: botData.industry || 'General',
-          targetAudience: botData.targetAudience || '',
+          name: sanitizedName,
+          description: sanitizedDescription,
+          industry: sanitizedIndustry,
+          targetAudience: sanitizedTargetAudience,
           tone: botData.tone || 'friendly',
           flow: botData.flow || { nodes: [], edges: [] },
           published: false,
@@ -296,13 +420,47 @@ export const useChatbotStore = create<ChatbotState>()(
         if (!bot) return false;
         if (!state.canEditBot(id)) return false;
         
+        // Validate and sanitize updates
+        const sanitizedUpdates: Partial<Chatbot> = {};
+        
+        if (updates.name) {
+          const nameValidation = validateBotName(updates.name);
+          if (!nameValidation.isValid) {
+            set({ error: nameValidation.error });
+            return false;
+          }
+          sanitizedUpdates.name = nameValidation.sanitized;
+        }
+        
+        if (updates.industry) {
+          const industryValidation = validateIndustry(updates.industry);
+          if (!industryValidation.isValid) {
+            set({ error: industryValidation.error });
+            return false;
+          }
+          sanitizedUpdates.industry = industryValidation.sanitized;
+        }
+        
+        if (updates.description) {
+          const descValidation = validateDescription(updates.description);
+          if (!descValidation.isValid) {
+            set({ error: descValidation.error });
+            return false;
+          }
+          sanitizedUpdates.description = descValidation.sanitized;
+        }
+        
+        if (updates.targetAudience) {
+          sanitizedUpdates.targetAudience = sanitizeInput(updates.targetAudience);
+        }
+        
         // Update in Supabase if configured
         if (isSupabaseConfigured() && supabase && !id.startsWith('bot_')) {
           const dbUpdates: Database['public']['Tables']['chatbots']['Update'] = {};
-          if (updates.name) dbUpdates.name = updates.name;
-          if (updates.description) dbUpdates.description = updates.description;
-          if (updates.industry) dbUpdates.industry = updates.industry;
-          if (updates.targetAudience) dbUpdates.target_audience = updates.targetAudience;
+          if (sanitizedUpdates.name) dbUpdates.name = sanitizedUpdates.name;
+          if (sanitizedUpdates.description) dbUpdates.description = sanitizedUpdates.description;
+          if (sanitizedUpdates.industry) dbUpdates.industry = sanitizedUpdates.industry;
+          if (sanitizedUpdates.targetAudience) dbUpdates.target_audience = sanitizedUpdates.targetAudience;
           if (updates.tone) dbUpdates.tone = updates.tone;
           if (updates.flow) dbUpdates.flow_data = updates.flow as any;
           if (updates.settings) dbUpdates.settings = updates.settings as any;
@@ -315,14 +473,17 @@ export const useChatbotStore = create<ChatbotState>()(
           }
         }
         
+        // Merge sanitized updates with original updates
+        const finalUpdates = { ...updates, ...sanitizedUpdates };
+        
         set(state => ({
           chatbots: state.chatbots.map(c => 
             c.id === id 
-              ? { ...c, ...updates, updatedAt: new Date(), lastModifiedAt: new Date() } 
+              ? { ...c, ...finalUpdates, updatedAt: new Date(), lastModifiedAt: new Date() } 
               : c
           ),
           currentChatbot: state.currentChatbot?.id === id 
-            ? { ...state.currentChatbot, ...updates, updatedAt: new Date(), lastModifiedAt: new Date() }
+            ? { ...state.currentChatbot, ...finalUpdates, updatedAt: new Date(), lastModifiedAt: new Date() }
             : state.currentChatbot
         }));
         return true;
