@@ -317,7 +317,9 @@ async function llmReply(params: {
   if (!key) return null;
 
   const model =
-    process.env.CHAT_LLM_MODEL?.trim() || 'openai/gpt-4o-mini';
+    process.env.CHAT_LLM_MODEL?.trim() ||
+    process.env.OPENROUTER_MODEL?.trim() ||
+    'openai/gpt-4o-mini';
 
   const company = params.prd.companyName || params.meta.name || 'the business';
   const industry = params.prd.industry || params.meta.industry || 'general';
@@ -367,17 +369,23 @@ Rules:
       },
       body: JSON.stringify({
         model,
-        temperature: 0.35,
-        max_tokens: 450,
+        temperature: 0.25,
+        max_tokens: 550,
         messages,
       }),
     });
+
+    if (!res.ok) {
+      throw new Error(`OpenRouter response ${res.status}`);
+    }
+
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const text = data.choices?.[0]?.message?.content?.trim();
     return text || null;
-  } catch {
+  } catch (error) {
+    console.error('llmReply failed:', error);
     return null;
   }
 }
