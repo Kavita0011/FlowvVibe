@@ -1,6 +1,21 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, Payment, Chatbot, PRD, FlowData, FlowNode, FlowEdge, Conversation, Message, BotTheme, BotSettings } from '../types';
+import {
+  supabase,
+  isSupabaseConfigured,
+  fetchChatbots,
+  createChatbot as createChatbotInDB,
+  updateChatbot as updateChatbotInDB,
+  deleteChatbot as deleteChatbotInDB,
+  signInWithPassword,
+  signUp,
+  signOut,
+  getCurrentUser,
+  getSession,
+  subscribeToChatbots
+} from '../lib/supabase';
+import type { Database } from '../types/supabase';
 
 interface ChatbotState {
   user: User | null;
@@ -39,17 +54,22 @@ interface ChatbotState {
   // Chatbot management with proper access controls
   setChatbots: (chatbots: Chatbot[]) => void;
   setCurrentChatbot: (chatbot: Chatbot | null) => void;
-  createChatbot: (botData: Partial<Chatbot>) => Chatbot | null;
-  updateChatbot: (id: string, updates: Partial<Chatbot>) => boolean;
-  deleteChatbot: (id: string) => boolean;
-  saveDraft: (id: string) => boolean;
-  publishBot: (id: string) => boolean;
-  activateBot: (id: string) => boolean;
-  deactivateBot: (id: string) => boolean;
+  createChatbot: (botData: Partial<Chatbot>) => Promise<Chatbot | null>;
+  updateChatbot: (id: string, updates: Partial<Chatbot>) => Promise<boolean>;
+  deleteChatbot: (id: string) => Promise<boolean>;
+  saveDraft: (id: string) => Promise<boolean>;
+  publishBot: (id: string) => Promise<boolean>;
+  activateBot: (id: string) => Promise<boolean>;
+  deactivateBot: (id: string) => Promise<boolean>;
   canEditBot: (botId: string) => boolean;
   canDeleteBot: (botId: string) => boolean;
   getUserBots: () => Chatbot[];
   getAllBots: () => Chatbot[];
+  
+  // Supabase integration
+  loadChatbots: () => Promise<void>;
+  loadCurrentUser: () => Promise<void>;
+  isUsingRealBackend: () => boolean;
   
   // PRD management
   setPRD: (prd: PRD | null) => void;
@@ -65,8 +85,8 @@ interface ChatbotState {
   removeEdge: (id: string) => void;
   
   // Theme and settings
-  updateBotTheme: (botId: string, theme: Partial<BotTheme>) => boolean;
-  updateBotSettings: (botId: string, settings: Partial<BotSettings>) => boolean;
+  updateBotTheme: (botId: string, theme: Partial<BotTheme>) => Promise<boolean>;
+  updateBotSettings: (botId: string, settings: Partial<BotSettings>) => Promise<boolean>;
   
   // Conversations
   setConversations: (conversations: Conversation[]) => void;
@@ -170,10 +190,65 @@ export const useChatbotStore = create<ChatbotState>()(
       setChatbots: (chatbots) => set({ chatbots }),
       setCurrentChatbot: (chatbot) => set({ currentChatbot: chatbot }),
       
-      createChatbot: (botData) => {
+      createChatbot: async (botData) => {
         const state = get();
         if (!state.user) return null;
         
+        // If Supabase is configured, save to database
+        if (isSupabaseConfigured() && supabase) {
+          const dbBot: Database['public']['Tables']['chatbots']['Insert'] = {
+            user_id: state.user.id,
+            name: botData.name || 'New Bot',
+            description: botData.description || '',
+            industry: botData.industry || 'General',
+            target_audience: botData.targetAudience || '',
+            tone: botData.tone || 'friendly',
+            flow_data: (botData.flow || { nodes: [], edges: [] }) as any,
+            is_published: false,
+            is_active: false,
+            settings: (botData.settings || {
+              welcomeMessage: 'Hello! How can I help you today?',
+              fallbackMessage: "I'm sorry, I didn't understand that. Could you please rephrase?",
+              typingIndicator: true,
+              soundEnabled: false,
+              fileAttachments: false,
+              maxFileSize: 5,
+              allowedFileTypes: ['.jpg', '.png', '.pdf'],
+              businessHoursOnly: false,
+              autoCloseTimeout: 30,
+              requireEmail: false,
+              requirePhone: false
+            }) as any
+          };
+          
+          const { data, error } = await createChatbotInDB(dbBot);
+          if (error) {
+            console.error('Failed to create chatbot in DB:', error);
+            // Fall through to local creation
+          } else if (data) {
+            // Convert DB format to app format
+            const newBot: Chatbot = {
+              id: data.id,
+              userId: data.user_id || state.user.id,
+              name: data.name,
+              description: data.description || '',
+              industry: data.industry || 'General',
+              targetAudience: data.target_audience || '',
+              tone: (data.tone as any) || 'friendly',
+              flow: (data.flow_data as any) || { nodes: [], edges: [] },
+              published: data.is_published || false,
+              status: data.is_published ? 'active' : 'draft',
+              channels: [],
+              createdAt: new Date(data.created_at),
+              updatedAt: new Date(data.updated_at),
+              settings: (data.settings as any) || {}
+            };
+            set(state => ({ chatbots: [...state.chatbots, newBot] }));
+            return newBot;
+          }
+        }
+        
+        // Fallback: Create locally only
         const newBot: Chatbot = {
           id: `bot_${Date.now()}`,
           userId: state.user.id,
@@ -185,7 +260,7 @@ export const useChatbotStore = create<ChatbotState>()(
           flow: botData.flow || { nodes: [], edges: [] },
           published: false,
           status: 'draft',
-          channels: botData.channels || [],
+          channels: [],
           createdAt: new Date(),
           updatedAt: new Date(),
           theme: botData.theme || {
@@ -215,11 +290,30 @@ export const useChatbotStore = create<ChatbotState>()(
         return newBot;
       },
       
-      updateChatbot: (id, updates) => {
-        const state = useChatbotStore.getState();
+      updateChatbot: async (id, updates) => {
+        const state = get();
         const bot = state.chatbots.find(c => c.id === id);
         if (!bot) return false;
         if (!state.canEditBot(id)) return false;
+        
+        // Update in Supabase if configured
+        if (isSupabaseConfigured() && supabase && !id.startsWith('bot_')) {
+          const dbUpdates: Database['public']['Tables']['chatbots']['Update'] = {};
+          if (updates.name) dbUpdates.name = updates.name;
+          if (updates.description) dbUpdates.description = updates.description;
+          if (updates.industry) dbUpdates.industry = updates.industry;
+          if (updates.targetAudience) dbUpdates.target_audience = updates.targetAudience;
+          if (updates.tone) dbUpdates.tone = updates.tone;
+          if (updates.flow) dbUpdates.flow_data = updates.flow as any;
+          if (updates.settings) dbUpdates.settings = updates.settings as any;
+          if (updates.published !== undefined) dbUpdates.is_published = updates.published;
+          if (updates.status) dbUpdates.is_active = updates.status === 'active';
+          
+          const { error } = await updateChatbotInDB(id, dbUpdates);
+          if (error) {
+            console.error('Failed to update chatbot in DB:', error);
+          }
+        }
         
         set(state => ({
           chatbots: state.chatbots.map(c => 
@@ -234,9 +328,18 @@ export const useChatbotStore = create<ChatbotState>()(
         return true;
       },
       
-      deleteChatbot: (id) => {
-        const state = useChatbotStore.getState();
+      deleteChatbot: async (id) => {
+        const state = get();
         if (!state.canDeleteBot(id)) return false;
+        
+        // Delete from Supabase if configured and not a local bot
+        if (isSupabaseConfigured() && supabase && !id.startsWith('bot_')) {
+          const { error } = await deleteChatbotInDB(id);
+          if (error) {
+            console.error('Failed to delete chatbot from DB:', error);
+            return false;
+          }
+        }
         
         set(state => ({
           chatbots: state.chatbots.filter(c => c.id !== id),
@@ -245,31 +348,31 @@ export const useChatbotStore = create<ChatbotState>()(
         return true;
       },
       
-      saveDraft: (id) => {
-        return useChatbotStore.getState().updateChatbot(id, { 
+      saveDraft: async (id) => {
+        return await get().updateChatbot(id, { 
           status: 'draft', 
           published: false,
           lastModifiedAt: new Date()
         });
       },
       
-      publishBot: (id) => {
-        return useChatbotStore.getState().updateChatbot(id, { 
+      publishBot: async (id) => {
+        return await get().updateChatbot(id, { 
           status: 'active', 
           published: true,
           updatedAt: new Date()
         });
       },
       
-      activateBot: (id) => {
-        return useChatbotStore.getState().updateChatbot(id, { 
+      activateBot: async (id) => {
+        return await get().updateChatbot(id, { 
           status: 'active',
           updatedAt: new Date()
         });
       },
       
-      deactivateBot: (id) => {
-        return useChatbotStore.getState().updateChatbot(id, { 
+      deactivateBot: async (id) => {
+        return await get().updateChatbot(id, { 
           status: 'inactive',
           updatedAt: new Date()
         });
@@ -303,24 +406,119 @@ export const useChatbotStore = create<ChatbotState>()(
         return state.chatbots;
       },
       
-      updateBotTheme: (botId, theme) => {
-        const state = useChatbotStore.getState();
+      updateBotTheme: async (botId, theme) => {
+        const state = get();
         const bot = state.chatbots.find(c => c.id === botId);
         if (!bot || !state.canEditBot(botId)) return false;
         
-        return state.updateChatbot(botId, {
+        return await state.updateChatbot(botId, {
           theme: { ...bot.theme, ...theme }
         });
       },
       
-      updateBotSettings: (botId, settings) => {
-        const state = useChatbotStore.getState();
+      updateBotSettings: async (botId, settings) => {
+        const state = get();
         const bot = state.chatbots.find(c => c.id === botId);
         if (!bot || !state.canEditBot(botId)) return false;
         
-        return state.updateChatbot(botId, {
+        return await state.updateChatbot(botId, {
           settings: { ...bot.settings, ...settings }
         });
+      },
+      
+      // Supabase integration functions
+      loadChatbots: async () => {
+        if (!isSupabaseConfigured() || !supabase) {
+          console.log('Supabase not configured, using local data');
+          return;
+        }
+        
+        const state = get();
+        if (!state.user) return;
+        
+        set({ isLoading: true, error: null });
+        
+        try {
+          const { data, error } = await fetchChatbots(state.user.id);
+          if (error) throw error;
+          
+          if (data) {
+            // Convert DB format to app format
+            const bots: Chatbot[] = data.map((dbBot: any) => ({
+              id: dbBot.id,
+              userId: dbBot.user_id,
+              name: dbBot.name,
+              description: dbBot.description || '',
+              industry: dbBot.industry || 'General',
+              targetAudience: dbBot.target_audience || '',
+              tone: dbBot.tone || 'friendly',
+              flow: dbBot.flow_data || { nodes: [], edges: [] },
+              published: dbBot.is_published || false,
+              status: dbBot.is_published ? (dbBot.is_active ? 'active' : 'inactive') : 'draft',
+              channels: [],
+              createdAt: new Date(dbBot.created_at),
+              updatedAt: new Date(dbBot.updated_at),
+              settings: dbBot.settings || {}
+            }));
+            
+            set({ chatbots: bots, isLoading: false });
+          }
+        } catch (err: any) {
+          console.error('Failed to load chatbots:', err);
+          set({ error: err.message, isLoading: false });
+        }
+      },
+      
+      loadCurrentUser: async () => {
+        if (!isSupabaseConfigured() || !supabase) return;
+        
+        set({ isLoading: true });
+        
+        try {
+          const { data: { user } } = await getCurrentUser();
+          if (user) {
+            // Fetch profile data
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+            
+            const appUser: User = {
+              id: user.id,
+              email: user.email || '',
+              displayName: profile?.display_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
+              role: user.user_metadata?.role || 'user',
+              isActive: true,
+              createdAt: new Date(user.created_at || Date.now()),
+              subscription: {
+                tier: user.user_metadata?.subscription_tier || 'free',
+                status: 'active',
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              },
+              companyName: profile?.company_name,
+              location: profile?.location,
+              photoURL: profile?.avatar_url
+            };
+            
+            set({ 
+              user: appUser, 
+              isAuthenticated: true, 
+              isAdmin: appUser.role === 'admin',
+              isLoading: false 
+            });
+            
+            // Load user's chatbots
+            await get().loadChatbots();
+          }
+        } catch (err: any) {
+          console.error('Failed to load current user:', err);
+          set({ isLoading: false });
+        }
+      },
+      
+      isUsingRealBackend: () => {
+        return isSupabaseConfigured() && !!supabase;
       },
       
       setPRD: (prd) => set({ prd }),
