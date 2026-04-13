@@ -105,7 +105,7 @@ const nodeColors: Record<string, string> = {
 
 export default function FlowBuilder() {
   const navigate = useNavigate();
-  const { currentChatbot, user, setFlowData } = useChatbotStore();
+  const { currentChatbot, user, setFlowData, saveDraft, publishBot } = useChatbotStore();
   const isPro = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -438,6 +438,7 @@ export default function FlowBuilder() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Core Actions - Always Available */}
             <button 
               onClick={undo}
               disabled={historyIndex <= 0}
@@ -454,24 +455,8 @@ export default function FlowBuilder() {
             >
               <Redo2 className="w-5 h-5" />
             </button>
-            <button 
-              onClick={copyNodes}
-              disabled={selectedNodes.length === 0}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Copy (Ctrl+C)"
-            >
-              <Copy className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => {
-                if (selectedNodes.length > 0) setSelectedNodes([]);
-                else setSelectedNodes(nodes.map(n => n.id));
-              }}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
-              title="Select All / Deselect"
-            >
-              <Layers className="w-5 h-5" />
-            </button>
+            
+            {/* View Options */}
             <button 
               onClick={toggleFullscreen}
               className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
@@ -479,49 +464,28 @@ export default function FlowBuilder() {
             >
               {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
             </button>
-            <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
-              title={isDarkMode ? "Light Mode" : "Dark Mode"}
-            >
-              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button 
-              onClick={() => setSnapToGrid(!snapToGrid)}
-              className={cn("p-2 rounded-lg transition-colors", snapToGrid ? "bg-cyan-500/20 text-cyan-400" : "hover:bg-slate-700 text-slate-400 hover:text-white")}
-              title={snapToGrid ? "Disable Snap to Grid" : "Enable Snap to Grid"}
-            >
-              <Grid3X3 className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setIsWireframeMode(!isWireframeMode)}
-              className={cn("p-2 rounded-lg transition-colors", isWireframeMode ? "bg-cyan-500/20 text-cyan-400" : "hover:bg-slate-700 text-slate-400 hover:text-white")}
-              title={isWireframeMode ? "Exit Wireframe" : "Wireframe Mode"}
-            >
-              {isWireframeMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
-            <button 
-              onClick={() => setShowLayersPanel(!showLayersPanel)}
-              className={cn("p-2 rounded-lg transition-colors", showLayersPanel ? "bg-cyan-500/20 text-cyan-400" : "hover:bg-slate-700 text-slate-400 hover:text-white")}
-              title="Layers"
-            >
-              <Layers className="w-5 h-5" />
-            </button>
+            
+            {/* Premium Features - Redirect to pricing if not paid */}
             <button 
               onClick={() => {
-                if (nodes.length < 2) {
-                  alert('Add at least 2 nodes before sharing');
+                if (user?.subscription?.tier === 'free') {
+                  navigate('/pricing');
                   return;
                 }
                 setShowShareModal(true);
               }}
               className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
-              title="Share"
+              title={user?.subscription?.tier === 'free' ? "Upgrade to Share" : "Share"}
             >
               <Share2 className="w-5 h-5" />
             </button>
+            
             <button 
-              onClick={async () => {
+              onClick={() => {
+                if (user?.subscription?.tier === 'free') {
+                  navigate('/pricing');
+                  return;
+                }
                 if (nodes.length < 2) {
                   alert('Add nodes to export');
                   return;
@@ -531,43 +495,42 @@ export default function FlowBuilder() {
               }}
               disabled={exporting}
               className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-              title={nodes.length < 2 ? "Add nodes to enable export" : "Export"}
+              title={user?.subscription?.tier === 'free' ? "Upgrade to Export" : "Export"}
             >
               {exporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
             </button>
+
+            {/* Divider */}
+            <div className="w-px h-6 bg-slate-700 mx-2" />
+            
+            {/* Save Actions */}
             <button 
-              onClick={() => setCurrentLanguage(currentLanguage === 'en' ? 'hi' : 'en')}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
-              title={currentLanguage === 'en' ? "Switch to Hindi" : "Switch to English"}
-            >
-              <Languages className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className={cn("p-2 rounded-lg transition-colors", showColorPicker ? "bg-cyan-500/20 text-cyan-400" : "hover:bg-slate-700 text-slate-400 hover:text-white")}
-              title="Customize Theme"
-            >
-              <Palette className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setShowOnboarding(true)}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
-              title="Help / Onboarding"
-            >
-              <HelpCircle className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={saveFlow}
-              className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg font-medium transition-colors"
+              onClick={() => {
+                saveFlow();
+                // Save as draft
+                if (currentChatbot?.id) {
+                  saveDraft(currentChatbot.id);
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors"
             >
               <Save className="w-4 h-4" />
-              Save & Test
+              Save Draft
+            </button>
+            
+            <button 
+              onClick={() => {
+                saveFlow();
+                // Publish the bot
+                if (currentChatbot?.id) {
+                  publishBot(currentChatbot.id);
+                  alert('Bot published successfully!');
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg font-medium transition-colors"
+            >
+              <Play className="w-4 h-4" />
+              Publish
             </button>
           </div>
         </nav>

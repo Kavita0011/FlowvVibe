@@ -45,9 +45,38 @@ export interface Chatbot {
   tone: 'formal' | 'friendly' | 'professional' | 'casual';
   flow: FlowData;
   published: boolean;
+  status: 'draft' | 'active' | 'inactive' | 'archived';
   channels: Channel[];
   createdAt: Date;
   updatedAt: Date;
+  lastModifiedAt?: Date;
+  theme?: BotTheme;
+  settings?: BotSettings;
+}
+
+export interface BotTheme {
+  primaryColor: string;
+  secondaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+  fontFamily: string;
+  borderRadius: 'none' | 'small' | 'medium' | 'large';
+  avatarUrl?: string;
+  logoUrl?: string;
+}
+
+export interface BotSettings {
+  welcomeMessage: string;
+  fallbackMessage: string;
+  typingIndicator: boolean;
+  soundEnabled: boolean;
+  fileAttachments: boolean;
+  maxFileSize: number;
+  allowedFileTypes: string[];
+  businessHoursOnly: boolean;
+  autoCloseTimeout: number;
+  requireEmail: boolean;
+  requirePhone: boolean;
 }
 
 export interface PRD {

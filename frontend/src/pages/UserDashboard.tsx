@@ -71,11 +71,28 @@ const subscriptionPlans = [
 
 export default function UserDashboard() {
   const navigate = useNavigate();
-  const { user, logout, payments, chatbots, setPRD } = useChatbotStore();
+  const { 
+    user, 
+    logout, 
+    payments, 
+    chatbots, 
+    setPRD, 
+    setCurrentChatbot,
+    getUserBots,
+    canEditBot,
+    canDeleteBot,
+    activateBot,
+    deactivateBot,
+    deleteChatbot,
+    isAdmin 
+  } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>(defaultSubscriptionPlans);
   const upgradeClicked = () => navigate('/pricing');
+  
+  // Get user's bots (or all bots if admin)
+  const userBots = getUserBots();
 
   useEffect(() => {
     async function fetchPlans() {
@@ -202,13 +219,16 @@ export default function UserDashboard() {
                 <button 
                   onClick={() => {
                     const newPRD: PRD = {
+                      id: `prd_${Date.now()}`,
+                      chatbotId: '',
                       companyName: '',
                       industry: '',
                       services: [],
                       targetAudience: '',
                       tone: 'friendly',
                       faq: [],
-                      escalationRules: ''
+                      escalationRules: '',
+                      createdAt: new Date()
                     };
                     setPRD(newPRD);
                     navigate('/prd');
@@ -221,41 +241,112 @@ export default function UserDashboard() {
               </div>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                {demoBots.map((bot) => (
-                  <div key={bot.id} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-cyan-500/50 transition-colors">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
-                        <Bot className="w-6 h-6 text-cyan-400" />
-                      </div>
-                      <span className={cn(
-                        "px-2 py-1 rounded-full text-xs",
-                        bot.status === 'active' ? "bg-green-500/20 text-green-400" : "bg-slate-500/20 text-slate-400"
-                      )}>
-                        {bot.status}
-                      </span>
-                    </div>
-                    <h3 className="text-white font-semibold text-lg mb-1">{bot.name}</h3>
-                    <p className="text-slate-400 text-sm mb-4">{bot.industry}</p>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-400">{bot.conversations} convos</span>
-                      <span className="text-slate-400">{bot.leads} leads</span>
-                    </div>
-                    <div className="flex gap-2 mt-4">
-                      <button 
-                        onClick={() => navigate('/flow')}
-                        className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => navigate('/preview')}
-                        className="flex-1 py-2 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg text-sm transition-colors"
-                      >
-                        Test
-                      </button>
-                    </div>
+                {userBots.length === 0 ? (
+                  <div className="col-span-full text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
+                    <Bot className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+                    <h3 className="text-white font-semibold mb-2">No chatbots yet</h3>
+                    <p className="text-slate-400 mb-4">Create your first chatbot to get started</p>
+                    <button 
+                      onClick={() => {
+                        const newPRD: PRD = {
+                          id: `prd_${Date.now()}`,
+                          chatbotId: '',
+                          companyName: '',
+                          industry: '',
+                          services: [],
+                          targetAudience: '',
+                          tone: 'friendly',
+                          faq: [],
+                          escalationRules: '',
+                          createdAt: new Date()
+                        };
+                        setPRD(newPRD);
+                        navigate('/prd');
+                      }}
+                      className="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 transition-colors"
+                    >
+                      Create Bot
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  userBots.map((bot) => (
+                    <div key={bot.id} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-cyan-500/50 transition-colors">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
+                          <Bot className="w-6 h-6 text-cyan-400" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-2 py-1 rounded-full text-xs",
+                            bot.status === 'active' ? "bg-green-500/20 text-green-400" :
+                            bot.status === 'draft' ? "bg-amber-500/20 text-amber-400" :
+                            bot.status === 'inactive' ? "bg-red-500/20 text-red-400" :
+                            "bg-slate-500/20 text-slate-400"
+                          )}>
+                            {bot.status}
+                          </span>
+                        </div>
+                      </div>
+                      <h3 className="text-white font-semibold text-lg mb-1">{bot.name}</h3>
+                      <p className="text-slate-400 text-sm mb-4">{bot.industry}</p>
+                      <div className="flex items-center justify-between text-sm text-slate-400 mb-4">
+                        <span>Updated {new Date(bot.updatedAt).toLocaleDateString()}</span>
+                        <span>{bot.published ? 'Published' : 'Unpublished'}</span>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button 
+                          onClick={() => {
+                            setCurrentChatbot(bot);
+                            navigate('/flow');
+                          }}
+                          disabled={!canEditBot(bot.id)}
+                          className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setCurrentChatbot(bot);
+                            navigate('/preview');
+                          }}
+                          className="flex-1 py-2 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg text-sm transition-colors"
+                        >
+                          Test
+                        </button>
+                        {bot.status === 'active' ? (
+                          <button 
+                            onClick={() => deactivateBot(bot.id)}
+                            className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm transition-colors"
+                            title="Deactivate"
+                          >
+                            <Pause className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => activateBot(bot.id)}
+                            className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm transition-colors"
+                            title="Activate"
+                          >
+                            <Play className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeleteBot(bot.id) && (
+                          <button 
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this bot?')) {
+                                deleteChatbot(bot.id);
+                              }
+                            }}
+                            className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Quick Actions */}
@@ -265,13 +356,16 @@ export default function UserDashboard() {
                   {[
                     { label: 'Create Bot', action: () => {
                       const newPRD: PRD = {
+                        id: `prd_${Date.now()}`,
+                        chatbotId: '',
                         companyName: '',
                         industry: '',
                         services: [],
                         targetAudience: '',
                         tone: 'friendly',
                         faq: [],
-                        escalationRules: ''
+                        escalationRules: '',
+                        createdAt: new Date()
                       };
                       setPRD(newPRD);
                       navigate('/prd');
