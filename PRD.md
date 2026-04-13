@@ -316,9 +316,9 @@ Total Cost: $0/month
 
 ## 📚 Documentation
 
-- [Cloudflare Deployment Guide](./CLOUDFLARE_DEPLOYMENT.md)
-- [API Documentation](./backend/worker.js)
-- [Database Schema](./supabase-setup.sql)
+- [Cloudflare Deployment Guide] (./CLOUDFLARE_DEPLOYMENT.md)
+- [API Documentation] (./backend/worker.js)
+- [Database Schema] (./supabase-setup.sql)
 
 ---
 
