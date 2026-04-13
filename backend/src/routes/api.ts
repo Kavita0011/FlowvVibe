@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { 
   getUserChatbots, getAllChatbots, getChatbotById, updateChatbot, deleteChatbot, createChatbot,
   getChatbotBookings, getChatbotLeads, getChatbotConversations,
-  getDashboardStats, getAllLeads,
+  getDashboardStats, getAllLeads, getChatbotAnalytics,
   searchUsers, searchChatbots, searchLeads
 } from '../db/db.js';
 
@@ -36,6 +36,28 @@ router.get('/dashboard/stats', auth, async (req, res) => {
     res.json(stats);
   } catch (error) {
     res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+router.get('/analytics', auth, async (req, res) => {
+  try {
+    const chatbotId = req.query.chatbotId as string;
+    const period = (req.query.period as '7d' | '30d' | '90d') || '7d';
+    if (!chatbotId) {
+      return res.status(400).json({ error: 'chatbotId is required' });
+    }
+    if (!['7d', '30d', '90d'].includes(period)) {
+      return res.status(400).json({ error: 'Invalid period' });
+    }
+    const bot = await getChatbotById(chatbotId);
+    if (!bot) return res.status(404).json({ error: 'Not found' });
+    if (req.user.role !== 'admin' && bot.user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const data = await getChatbotAnalytics(chatbotId, period);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get analytics' });
   }
 });
 
@@ -150,7 +172,17 @@ router.get('/search/users', auth, adminOnly, async (req, res) => {
     const result = await searchUsers(q, page, limit);
     res.json(result);
   } catch (error) {
-res.status(500).json({ error: 'Search failed' });
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+router.get('/search/chatbots', auth, adminOnly, async (req, res) => {
+  try {
+    const q = req.query.q as string;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = await searchChatbots(q, page, limit);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Search failed' });
   }

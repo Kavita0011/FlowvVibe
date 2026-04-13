@@ -70,8 +70,13 @@ export const getUserById = async (id: string) => {
 };
 
 export const updateUser = async (id: string, data: Record<string, unknown>) => {
-  const fields = Object.keys(data).map((k, i) => `${k} = $${i + 2}`).join(', ');
-  const values = [...Object.values(data), id];
+  const keys = Object.keys(data);
+  if (keys.length === 0) {
+    const result = await query('SELECT * FROM users WHERE id = $1', [id]);
+    return result.rows[0];
+  }
+  const fields = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+  const values = [id, ...Object.values(data)];
   const result = await query(`UPDATE users SET ${fields}, updated_at = NOW() WHERE id = $1 RETURNING *`, values);
   return result.rows[0];
 };
@@ -99,8 +104,13 @@ export const getChatbotById = async (id: string) => {
 };
 
 export const updateChatbot = async (id: string, data: Record<string, unknown>) => {
-  const fields = Object.keys(data).map((k, i) => `${k} = $${i + 2}`).join(', ');
-  const values = [...Object.values(data), id];
+  const keys = Object.keys(data);
+  if (keys.length === 0) {
+    const result = await query('SELECT * FROM chatbots WHERE id = $1', [id]);
+    return result.rows[0];
+  }
+  const fields = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+  const values = [id, ...Object.values(data)];
   const result = await query(`UPDATE chatbots SET ${fields}, updated_at = NOW() WHERE id = $1 RETURNING *`, values);
   return result.rows[0];
 };
@@ -196,6 +206,54 @@ export const getChatbotConversations = async (chatbotId: string, page = 1, limit
   return paginate('conversations', 'chatbot_id = $1', page, limit, 'started_at DESC', [chatbotId]);
 };
 
+export const ensureConversation = async (chatbotId: string, sessionId: string) => {
+  const existing = await query(
+    'SELECT * FROM conversations WHERE chatbot_id = $1 AND session_id = $2',
+    [chatbotId, sessionId]
+  );
+  if (existing.rows[0]) return existing.rows[0];
+  const created = await query(
+    'INSERT INTO conversations (chatbot_id, session_id) VALUES ($1, $2) RETURNING *',
+    [chatbotId, sessionId]
+  );
+  return created.rows[0];
+};
+
+export const addMessage = async (params: {
+  conversationId: string;
+  sender: string;
+  content: string;
+  intent?: string | null;
+  sentiment?: string | null;
+}) => {
+  const r = await query(
+    `INSERT INTO messages (conversation_id, sender, content, intent, sentiment)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [
+      params.conversationId,
+      params.sender,
+      params.content,
+      params.intent ?? null,
+      params.sentiment ?? null,
+    ]
+  );
+  return r.rows[0];
+};
+
+export const getRecentMessagesForConversation = async (
+  conversationId: string,
+  limit = 24
+) => {
+  const r = await query(
+    `SELECT sender, content FROM messages
+     WHERE conversation_id = $1
+     ORDER BY timestamp ASC
+     LIMIT $2`,
+    [conversationId, limit]
+  );
+  return r.rows as Array<{ sender: string; content: string }>;
+};
+
 // ==================== ANALYTICS ====================
 export const getDashboardStats = async () => {
   const [users, chatbots, payments, leads, bookings] = await Promise.all([
@@ -220,6 +278,94 @@ export const getDashboardStats = async () => {
   };
 };
 
+export interface ChatbotAnalytics {
+  totalConversations: number;
+  totalMessages: number;
+  avgResponseTime: number;
+  satisfaction: number;
+  topIntents: { intent: string; count: number }[];
+  conversationsByDay: { date: string; count: number }[];
+  leadsCollected: number;
+  conversionRate: number;
+}
+
+export const getChatbotAnalytics = async (
+  chatbotId: string,
+  period: '7d' | '30d' | '90d'
+): Promise<ChatbotAnalytics> => {
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+
+  const [convRow, msgRow, intentRows, dayRows, leadsRow, ratingRow] = await Promise.all([
+    query(
+      `SELECT COUNT(*)::text AS c FROM conversations
+       WHERE chatbot_id = $1 AND started_at >= NOW() - ($2::integer * INTERVAL '1 day')`,
+      [chatbotId, days]
+    ),
+    query(
+      `SELECT COUNT(*)::text AS c FROM messages m
+       INNER JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.chatbot_id = $1 AND c.started_at >= NOW() - ($2::integer * INTERVAL '1 day')`,
+      [chatbotId, days]
+    ),
+    query(
+      `SELECT COALESCE(m.intent, 'general') AS intent, COUNT(*)::text AS count FROM messages m
+       INNER JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.chatbot_id = $1 AND m.sender = 'bot' AND c.started_at >= NOW() - ($2::integer * INTERVAL '1 day')
+       GROUP BY COALESCE(m.intent, 'general') ORDER BY COUNT(*) DESC LIMIT 8`,
+      [chatbotId, days]
+    ),
+    query(
+      `SELECT to_char(date_trunc('day', started_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS d,
+              COUNT(*)::text AS c
+       FROM conversations
+       WHERE chatbot_id = $1 AND started_at >= NOW() - ($2::integer * INTERVAL '1 day')
+       GROUP BY 1 ORDER BY 1`,
+      [chatbotId, days]
+    ),
+    query(
+      `SELECT COUNT(*)::text AS c FROM leads
+       WHERE chatbot_id = $1 AND created_at >= NOW() - ($2::integer * INTERVAL '1 day')`,
+      [chatbotId, days]
+    ),
+    query(
+      `SELECT AVG(rating)::text AS avg FROM conversations
+       WHERE chatbot_id = $1 AND rating IS NOT NULL AND started_at >= NOW() - ($2::integer * INTERVAL '1 day')`,
+      [chatbotId, days]
+    ),
+  ]);
+
+  const totalConversations = parseInt(convRow.rows[0]?.c || '0', 10);
+  const totalMessages = parseInt(msgRow.rows[0]?.c || '0', 10);
+  const leadsCollected = parseInt(leadsRow.rows[0]?.c || '0', 10);
+  const topIntents = intentRows.rows.map((r) => ({
+    intent: r.intent,
+    count: parseInt(r.count, 10),
+  }));
+  const conversationsByDay = dayRows.rows.map((r) => ({
+    date: r.d,
+    count: parseInt(r.c, 10),
+  }));
+
+  const avgRating = ratingRow.rows[0]?.avg ? parseFloat(ratingRow.rows[0].avg) : 0;
+  const satisfaction = avgRating > 0 ? Math.min(100, Math.round((avgRating / 5) * 100)) : 0;
+
+  const conversionRate =
+    totalConversations > 0
+      ? Math.round((leadsCollected / totalConversations) * 1000) / 10
+      : 0;
+
+  return {
+    totalConversations,
+    totalMessages,
+    avgResponseTime: 0,
+    satisfaction,
+    topIntents,
+    conversationsByDay,
+    leadsCollected,
+    conversionRate,
+  };
+};
+
 // ==================== SEARCH ====================
 export const searchUsers = async (search: string, page = 1, limit = 20) => {
   return paginate('users', 'email ILIKE $1', page, limit, 'created_at DESC', [`%${search}%`]);
@@ -231,4 +377,55 @@ export const searchChatbots = async (search: string, page = 1, limit = 20) => {
 
 export const searchLeads = async (search: string, page = 1, limit = 20) => {
   return paginate('leads', 'name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1', page, limit, 'created_at DESC', [`%${search}%`]);
+};
+
+/** Creates pricing_plans / custom_tiers if missing (admin pricing API). Idempotent. */
+export const initPricingTables = async (): Promise<void> => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS pricing_plans (
+      id VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      price INTEGER NOT NULL DEFAULT 0,
+      original_price INTEGER DEFAULT 0,
+      period VARCHAR(50) DEFAULT 'one-time',
+      description TEXT,
+      is_on_sale BOOLEAN DEFAULT false,
+      sale_reason VARCHAR(100),
+      sale_ends DATE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS custom_tiers (
+      id VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      min_users INTEGER DEFAULT 1,
+      max_users VARCHAR(20) DEFAULT 'unlimited',
+      price_per_user INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  const { rows } = await query('SELECT COUNT(*)::text AS c FROM pricing_plans');
+  if (parseInt(rows[0].c, 10) === 0) {
+    await query(`
+      INSERT INTO pricing_plans (id, name, price, original_price, period, description, is_on_sale, sale_ends) VALUES
+      ('free', 'Free', 0, 0, 'forever', 'For testing', false, NULL),
+      ('starter', 'Starter', 999, 1999, 'one-time', 'One-time payment', true, '2026-04-30'),
+      ('pro', 'Pro', 2499, 4999, 'one-time', 'Most popular', true, '2026-04-30'),
+      ('enterprise', 'Enterprise', 9999, 19999, 'one-time', 'For large teams', true, '2026-04-30')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+  }
+  const tierCount = await query('SELECT COUNT(*)::text AS c FROM custom_tiers');
+  if (parseInt(tierCount.rows[0].c, 10) === 0) {
+    await query(`
+      INSERT INTO custom_tiers (id, name, min_users, max_users, price_per_user) VALUES
+      ('starter', 'Starter', 1, '5', 399),
+      ('team', 'Team', 6, '20', 349),
+      ('business', 'Business', 21, '50', 299),
+      ('enterprise', 'Enterprise', 51, 'unlimited', 249)
+      ON CONFLICT (id) DO NOTHING;
+    `);
+  }
 };

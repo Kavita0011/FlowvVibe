@@ -4,7 +4,17 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db/db.js';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'flowvibe-secret-key-2024';
+
+function resolveJwtSecret(): string {
+  const s = process.env.JWT_SECRET?.trim();
+  if (s) return s;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return 'flowvibe-dev-only-secret-change-me';
+}
+
+export const JWT_SECRET = resolveJwtSecret();
 
 interface User {
   id: string;
@@ -137,4 +147,3 @@ router.get('/verify', async (req, res) => {
 });
 
 export default router;
-export { JWT_SECRET };

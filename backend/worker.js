@@ -81,11 +81,8 @@ const DEFAULT_TIERS = [
   { id: 'enterprise', name: 'Enterprise', min_users: 51, max_users: 'unlimited', price_per_user: 249 },
 ];
 
-// Demo users (in production, use KV or D1 database)
-const DEMO_USERS = {
-  'devappkavita@gmail.com': { id: 'admin_001', password: 'kavitabisht2598@sbi', role: 'admin', tier: 'enterprise' },
-  'demo@flowvibe.ai': { id: 'demo_001', password: 'demo123', role: 'user', tier: 'pro' },
-};
+/** Optional: bind JSON in Cloudflare as DEMO_USERS_KV or use Workers secrets — never commit real credentials. */
+const DEMO_USERS = {};
 
 // Handle GET pricing
 async function handleGetPricing(env) {
@@ -156,7 +153,6 @@ async function handleLogin(request, env) {
   try {
     const { email, password } = await request.json();
     
-    // Check demo users
     if (DEMO_USERS[email] && DEMO_USERS[email].password === password) {
       const user = DEMO_USERS[email];
       return new Response(JSON.stringify({
@@ -171,8 +167,8 @@ async function handleLogin(request, env) {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    
-    // Demo mode: allow any login
+
+    // Demo mode: allow any login (disable in production Worker or use real auth)
     return new Response(JSON.stringify({
       user: {
         id: `user_${Date.now()}`,

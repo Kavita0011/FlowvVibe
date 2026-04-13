@@ -11,6 +11,8 @@ import type { Message } from '../types';
 
 type Sender = 'user' | 'bot';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 export default function ChatPreview() {
   const navigate = useNavigate();
   const { currentChatbot, prd } = useChatbotStore();
@@ -46,48 +48,62 @@ export default function ChatPreview() {
     }
   }, [prd]);
 
-  const findResponse = (userInput: string): string => {
+  /** Offline / demo fallback when API is unreachable (mirrors weaker path; backend is authoritative). */
+  const findResponseLocal = (userInput: string): string => {
     const flow = currentChatbot?.flow;
-    if (!flow) return "I'm not sure how to respond to that. Can you try asking differently?";
+    const company = prd?.companyName || currentChatbot?.name || 'us';
+    const lowerInput = userInput.toLowerCase().normalize('NFKC');
 
-    const lowerInput = userInput.toLowerCase();
-    
+    const overlap = (a: string, b: string) => {
+      const btoks = b.split(/\s+/).filter((t) => t.length > 2);
+      return btoks.reduce((n, t) => n + (a.includes(t) ? 1 : 0), 0);
+    };
+
+    let bestFaq: { a: string; s: number } | null = null;
     for (const faq of prd?.faq || []) {
-      if (lowerInput.includes(faq.question.toLowerCase().split(' ')[0])) {
-        return faq.answer;
+      const q = faq.question.toLowerCase();
+      const s = overlap(lowerInput, q) * 2 + (lowerInput.includes(q.slice(0, Math.min(24, q.length))) ? 3 : 0);
+      if (!bestFaq || s > bestFaq.s) bestFaq = { a: faq.answer, s };
+    }
+    if (bestFaq && bestFaq.s >= 2) return bestFaq.a;
+
+    for (const node of flow?.nodes || []) {
+      if (node.type !== 'aiResponse') continue;
+      const msg = String((node.data as { message?: string })?.message || '');
+      const intent = String((node.data as { intent?: string })?.intent || '');
+      const blob = `${msg} ${(node.data as { label?: string })?.label || ''}`.toLowerCase();
+      if (intent && lowerInput.includes(intent)) return msg || `Thanks for your message — how else can ${company} help?`;
+      if (overlap(lowerInput, blob) >= 2 && msg) return msg;
+    }
+
+    for (const service of prd?.services || []) {
+      if (overlap(lowerInput, service.toLowerCase()) >= 1) {
+        return `We offer ${service}. Would you like more detail or help choosing the right option?`;
       }
     }
 
-    const services = prd?.services || [];
-    for (const service of services) {
-      if (lowerInput.includes(service.toLowerCase().split(' ')[0])) {
-        return `Great question! We offer ${service}. Would you like me to help you with that?`;
-      }
-    }
-
-    const templates = [
-      { keywords: ['hello', 'hi', 'hey'], response: `Hi there! How can I assist you today?` },
-      { keywords: ['help', 'support'], response: `I'd be happy to help! What do you need assistance with?` },
-      { keywords: ['thank', 'thanks'], response: `You're welcome! Is there anything else I can help you with?` },
-      { keywords: ['bye', 'goodbye'], response: `Thank you for chatting with us! Have a great day!` },
+    const templates: { keys: string[]; r: string }[] = [
+      { keys: ['hello', 'hi', 'hey', 'good morning'], r: `Hi — what can ${company} help you with today?` },
+      { keys: ['help', 'support', 'issue'], r: `I'll help. What exactly is going wrong (or what’s your goal)?` },
+      { keys: ['price', 'cost', 'pricing'], r: `I can explain pricing. What plan or use case are you considering?` },
+      { keys: ['thank', 'thanks'], r: `You're welcome! Anything else I can clear up?` },
+      { keys: ['bye', 'goodbye'], r: `Thanks for chatting — have a great day!` },
     ];
-
-    for (const template of templates) {
-      if (template.keywords.some(k => lowerInput.includes(k))) {
-        return template.response;
-      }
+    for (const t of templates) {
+      if (t.keys.some((k) => lowerInput.includes(k))) return t.r;
     }
 
-    return "I understand. Let me connect you with the right information. What specific help do you need?";
+    return `I want to get you the right answer. Could you share a bit more about what you need from ${company}?`;
   };
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
+    const text = input.trim();
     const userMessage = {
       id: Date.now().toString(),
       sender: 'user' as Sender,
-      content: input,
+      content: text,
       timestamp: new Date()
     };
 
@@ -95,16 +111,51 @@ export default function ChatPreview() {
     setInput('');
     setLoading(true);
 
-    setTimeout(() => {
-      const botResponse = {
-        id: (Date.now() + 1).toString(),
-        sender: 'bot' as Sender,
-        content: findResponse(input),
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, botResponse]);
-      setLoading(false);
-    }, 1000);
+    const botId = currentChatbot?.id;
+    const storageKey = botId ? `fv_preview_sess_${botId}` : '';
+
+    try {
+      if (botId) {
+        const sid = storageKey ? sessionStorage.getItem(storageKey) || '' : '';
+        const res = await fetch(`${API_URL}/api/chat/${botId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            context: { sessionId: sid || undefined }
+          })
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { conversationId?: string; response?: string };
+          if (data.conversationId && storageKey) {
+            sessionStorage.setItem(storageKey, data.conversationId);
+          }
+          const reply = data.response?.trim() || findResponseLocal(text);
+          setMessages(prev => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              sender: 'bot' as Sender,
+              content: reply,
+              timestamp: new Date()
+            }
+          ]);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      /* use local fallback */
+    }
+
+    const botResponse = {
+      id: (Date.now() + 1).toString(),
+      sender: 'bot' as Sender,
+      content: findResponseLocal(text),
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, botResponse]);
+    setLoading(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
