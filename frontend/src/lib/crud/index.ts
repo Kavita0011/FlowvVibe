@@ -5,9 +5,11 @@ export * from './conversations';
 export * from './payments';
 export * from './leads';
 
-// Export query builder and bot features
+// Export query builder and advanced features
 export * from './query-builder';
 export * from './bot-features';
+export * from './admin-queries';
+export * from './pricing-features';
 
 // Re-export types for convenience
 export type { User, UserInsert, UserUpdate } from './users';
