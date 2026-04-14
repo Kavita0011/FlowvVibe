@@ -156,6 +156,35 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Pricing Plans table
+CREATE TABLE IF NOT EXISTS pricing_plans (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    price INTEGER NOT NULL,
+    features JSONB DEFAULT '[]',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Payment Methods table
+CREATE TABLE IF NOT EXISTS payment_methods (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    details JSONB,
+    is_default BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Insert default pricing plans
+INSERT INTO pricing_plans (id, name, price, features, is_active) VALUES
+('free', 'Free', 0, '["1 Chatbot", "50 Conversations/month", "Basic Analytics", "Email Support"]', true),
+('starter', 'Starter', 999, '["2 Chatbots", "500 Conversations", "Premium Widget", "Slack Integration"]', true),
+('pro', 'Pro', 2499, '["5 Chatbots", "Unlimited Conversations", "All Channels", "Priority Support", "Advanced Analytics", "Custom Branding", "Export Widget"]', true),
+('enterprise', 'Enterprise', 9999, '["Unlimited Chatbots", "All Integrations", "Dedicated Support", "Custom Development", "SLA Guarantee", "White Label"]', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_chatbots_user ON chatbots(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_chatbot ON bookings(chatbot_id);
@@ -203,3 +232,12 @@ CREATE POLICY "Users can view own conversations" ON conversations FOR SELECT USI
 CREATE POLICY "Users can view own messages" ON messages FOR SELECT USING (
   EXISTS (SELECT 1 FROM conversations WHERE id = messages.conversation_id AND user_id = auth.uid())
 );
+
+-- RLS Policies for Pricing Plans (public read)
+CREATE POLICY "Anyone can view pricing plans" ON pricing_plans FOR SELECT USING (true);
+
+-- RLS Policies for Payment Methods
+CREATE POLICY "Users can view own payment methods" ON payment_methods FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create payment methods" ON payment_methods FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own payment methods" ON payment_methods FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own payment methods" ON payment_methods FOR DELETE USING (auth.uid() = user_id);
