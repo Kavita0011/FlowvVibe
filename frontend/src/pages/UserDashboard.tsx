@@ -90,7 +90,7 @@ export default function UserDashboard() {
   } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>(defaultSubscriptionPlans);
+  const [plansList, setPlansList] = useState<any[]>(defaultSubscriptionPlans);
   const [dbChatbots, setDbChatbots] = useState<ChatbotRow[]>([]);
   const [dbPayments, setDbPayments] = useState<PaymentRow[]>([]);
   const [dbLeads, setDbLeads] = useState<LeadRow[]>([]);
@@ -145,7 +145,7 @@ export default function UserDashboard() {
         const { data: plans, error: plansError } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
         if (plansError) throw plansError;
         if (plans && plans.length > 0) {
-          setSubscriptionPlans(plans.map((plan: any) => ({
+          setPlansList(plans.map((plan: any) => ({
             id: plan.id,
             name: plan.name,
             price: plan.price,

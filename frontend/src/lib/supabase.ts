@@ -51,58 +51,6 @@ export async function getSession() {
   return await supabase.auth.getSession();
 }
 
-// Payment Methods CRUD (Admin only)
-export async function fetchPaymentMethods(activeOnly = false) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  let query = supabase.from('payment_methods').select('*').order('created_at', { ascending: false });
-  if (activeOnly) {
-    query = query.eq('is_active', true);
-  }
-  return await query;
-}
-
-export async function createPaymentMethod(method: Database['public']['Tables']['payment_methods']['Insert']) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  return await supabase.from('payment_methods').insert(method).select().single();
-}
-
-export async function updatePaymentMethod(id: string, updates: Database['public']['Tables']['payment_methods']['Update']) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  return await supabase.from('payment_methods').update(updates).eq('id', id).select().single();
-}
-
-export async function deletePaymentMethod(id: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  return await supabase.from('payment_methods').delete().eq('id', id);
-}
-
-// Pricing Plans CRUD
-export async function fetchPricingPlans(activeOnly = true) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  let query = supabase.from('pricing_plans').select('*').order('price', { ascending: true });
-  if (activeOnly) {
-    query = query.eq('is_active', true);
-  }
-  return await query;
-}
-
-export async function createPricingPlan(plan: Database['public']['Tables']['pricing_plans']['Insert']) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  return await supabase.from('pricing_plans').insert(plan).select().single();
-}
-
-export async function updatePricingPlan(id: string, updates: Database['public']['Tables']['pricing_plans']['Update']) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  return await supabase.from('pricing_plans').update(updates).eq('id', id).select().single();
-}
-
-export async function deletePricingPlan(id: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  return await supabase.from('pricing_plans').delete().eq('id', id);
-}
-
 // Realtime subscriptions
 export function subscribeToChatbots(userId: string, callback: (payload: any) => void) {
   if (!supabase) return null;
