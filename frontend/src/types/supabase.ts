@@ -9,41 +9,6 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      activity_log: {
-        Row: {
-          id: string
-          user_id: string | null
-          action: string
-          entity_type: string | null
-          entity_id: string | null
-          metadata: Json
-          ip_address: string | null
-          user_agent: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          action: string
-          entity_type?: string | null
-          entity_id?: string | null
-          metadata?: Json
-          ip_address?: string | null
-          user_agent?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string | null
-          action?: string
-          entity_type?: string | null
-          entity_id?: string | null
-          metadata?: Json
-          ip_address?: string | null
-          user_agent?: string | null
-          created_at?: string
-        }
-      }
       chatbots: {
         Row: {
           id: string
@@ -107,82 +72,6 @@ export interface Database {
           conversations_count?: number
           created_at?: string
           updated_at?: string
-        }
-      }
-      conversations: {
-        Row: {
-          id: string
-          chatbot_id: string | null
-          visitor_id: string | null
-          visitor_name: string | null
-          visitor_email: string | null
-          session_data: Json
-          started_at: string
-          ended_at: string | null
-          duration_seconds: number | null
-          rating: number | null
-          feedback: string | null
-          is_resolved: boolean
-          metadata: Json
-        }
-        Insert: {
-          id?: string
-          chatbot_id?: string | null
-          visitor_id?: string | null
-          visitor_name?: string | null
-          visitor_email?: string | null
-          session_data?: Json
-          started_at?: string
-          ended_at?: string | null
-          duration_seconds?: number | null
-          rating?: number | null
-          feedback?: string | null
-          is_resolved?: boolean
-          metadata?: Json
-        }
-        Update: {
-          id?: string
-          chatbot_id?: string | null
-          visitor_id?: string | null
-          visitor_name?: string | null
-          visitor_email?: string | null
-          session_data?: Json
-          started_at?: string
-          ended_at?: string | null
-          duration_seconds?: number | null
-          rating?: number | null
-          feedback?: string | null
-          is_resolved?: boolean
-          metadata?: Json
-        }
-      }
-      messages: {
-        Row: {
-          id: string
-          conversation_id: string | null
-          sender_type: string
-          content: string
-          message_type: string
-          metadata: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          conversation_id?: string | null
-          sender_type: string
-          content: string
-          message_type?: string
-          metadata?: Json
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          conversation_id?: string | null
-          sender_type?: string
-          content?: string
-          message_type?: string
-          metadata?: Json
-          created_at?: string
         }
       }
       profiles: {
@@ -278,6 +167,247 @@ export interface Database {
           invoice_id?: string | null
           receipt_url?: string | null
           metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      users: {
+        Row: {
+          id: string
+          email: string
+          password_hash: string
+          display_name: string | null
+          role: string
+          phone: string | null
+          company_name: string | null
+          location: string | null
+          is_active: boolean
+          subscription_tier: string
+          subscription_status: string
+          subscription_expires_at: string | null
+          created_at: string
+          updated_at: string
+          last_login_at: string | null
+        }
+        Insert: {
+          id?: string
+          email: string
+          password_hash: string
+          display_name?: string | null
+          role?: string
+          phone?: string | null
+          company_name?: string | null
+          location?: string | null
+          is_active?: boolean
+          subscription_tier?: string
+          subscription_status?: string
+          subscription_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+          last_login_at?: string | null
+        }
+        Update: {
+          id?: string
+          email?: string
+          password_hash?: string
+          display_name?: string | null
+          role?: string
+          phone?: string | null
+          company_name?: string | null
+          location?: string | null
+          is_active?: boolean
+          subscription_tier?: string
+          subscription_status?: string
+          subscription_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+          last_login_at?: string | null
+        }
+      }
+      conversations: {
+        Row: {
+          id: string
+          chatbot_id: string
+          user_id: string | null
+          session_id: string | null
+          visitor_id: string | null
+          visitor_name: string | null
+          visitor_email: string | null
+          status: string
+          started_at: string
+          ended_at: string | null
+          duration_seconds: number | null
+          rating: number | null
+          feedback: string | null
+          lead_data: Json | null
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          chatbot_id: string
+          user_id?: string | null
+          session_id?: string | null
+          visitor_id?: string | null
+          visitor_name?: string | null
+          visitor_email?: string | null
+          status?: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number | null
+          rating?: number | null
+          feedback?: string | null
+          lead_data?: Json | null
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          chatbot_id?: string
+          user_id?: string | null
+          session_id?: string | null
+          visitor_id?: string | null
+          visitor_name?: string | null
+          visitor_email?: string | null
+          status?: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number | null
+          rating?: number | null
+          feedback?: string | null
+          lead_data?: Json | null
+          metadata?: Json
+        }
+      }
+      messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          sender: string
+          content: string
+          message_type: string
+          intent: string | null
+          sentiment: string | null
+          confidence: number | null
+          metadata: Json
+          timestamp: string
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          sender: string
+          content: string
+          message_type?: string
+          intent?: string | null
+          sentiment?: string | null
+          confidence?: number | null
+          metadata?: Json
+          timestamp?: string
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          sender?: string
+          content?: string
+          message_type?: string
+          intent?: string | null
+          sentiment?: string | null
+          confidence?: number | null
+          metadata?: Json
+          timestamp?: string
+        }
+      }
+      leads: {
+        Row: {
+          id: string
+          chatbot_id: string
+          user_id: string
+          conversation_id: string | null
+          name: string | null
+          email: string | null
+          phone: string | null
+          interest: string | null
+          budget: string | null
+          timeline: string | null
+          notes: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chatbot_id: string
+          user_id: string
+          conversation_id?: string | null
+          name?: string | null
+          email?: string | null
+          phone?: string | null
+          interest?: string | null
+          budget?: string | null
+          timeline?: string | null
+          notes?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chatbot_id?: string
+          user_id?: string
+          conversation_id?: string | null
+          name?: string | null
+          email?: string | null
+          phone?: string | null
+          interest?: string | null
+          budget?: string | null
+          timeline?: string | null
+          notes?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      bookings: {
+        Row: {
+          id: string
+          chatbot_id: string
+          user_id: string
+          customer_name: string
+          customer_email: string
+          customer_phone: string | null
+          service: string
+          booking_date: string
+          booking_time: string
+          notes: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chatbot_id: string
+          user_id: string
+          customer_name: string
+          customer_email: string
+          customer_phone?: string | null
+          service: string
+          booking_date: string
+          booking_time: string
+          notes?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chatbot_id?: string
+          user_id?: string
+          customer_name?: string
+          customer_email?: string
+          customer_phone?: string | null
+          service?: string
+          booking_date?: string
+          booking_time?: string
+          notes?: string | null
+          status?: string
           created_at?: string
           updated_at?: string
         }

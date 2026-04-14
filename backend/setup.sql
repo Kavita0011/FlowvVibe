@@ -235,20 +235,6 @@ CREATE TABLE IF NOT EXISTS api_keys (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Activity logs table
-CREATE TABLE IF NOT EXISTS activity_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    action VARCHAR(100) NOT NULL,
-    entity_type VARCHAR(50),
-    entity_id UUID,
-    details TEXT,
-    ip_address INET,
-    user_agent TEXT,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
 -- Feature access table (for premium addons)
 CREATE TABLE IF NOT EXISTS feature_access (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -280,8 +266,6 @@ CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_chatbot_id ON bookings(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(api_key);
 CREATE INDEX IF NOT EXISTS idx_feature_access_user_id ON feature_access(user_id);
@@ -365,14 +349,6 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO api_keys (id, user_id, name, api_key, permissions, is_active) VALUES
 ('160e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440002', 'Production API Key', 'pk_live_1234567890abcdef', '["read", "write"]', true),
 ('160e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440002', 'Test API Key', 'pk_test_abcdef1234567890', '["read"]', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Demo Data for Activity Logs
-INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details) VALUES
-('170e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440002', 'created', 'chatbot', '660e8400-e29b-41d4-a716-446655440001', 'Created Customer Support Bot'),
-('170e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440002', 'updated', 'chatbot', '660e8400-e29b-41d4-a716-446655440001', 'Updated bot configuration'),
-('170e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440003', 'created', 'chatbot', '660e8400-e29b-41d4-a716-446655440002', 'Created Sales Assistant'),
-('170e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440002', 'payment_completed', 'payment', '990e8400-e29b-41d4-a716-446655440001', 'Pro plan payment completed')
 ON CONFLICT (id) DO NOTHING;
 
 -- Demo Data for Feature Access

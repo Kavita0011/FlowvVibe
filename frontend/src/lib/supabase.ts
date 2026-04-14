@@ -90,14 +90,235 @@ export async function fetchConversations(chatbotId?: string) {
   
   let query = supabase
     .from('conversations')
-    .select('*, messages(*)')
-    .order('created_at', { ascending: false });
+    .select('*')
+    .order('started_at', { ascending: false });
   
   if (chatbotId) {
     query = query.eq('chatbot_id', chatbotId);
   }
   
   return await query;
+}
+
+export async function createConversation(conversation: Database['public']['Tables']['conversations']['Insert']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('conversations')
+    .insert(conversation)
+    .select()
+    .single();
+}
+
+export async function updateConversation(id: string, updates: Database['public']['Tables']['conversations']['Update']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('conversations')
+    .update({ ...updates, ended_at: updates.ended_at || new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+}
+
+// Messages operations
+export async function fetchMessages(conversationId: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('timestamp', { ascending: true });
+}
+
+export async function createMessage(message: Database['public']['Tables']['messages']['Insert']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('messages')
+    .insert(message)
+    .select()
+    .single();
+}
+
+// Users CRUD
+export async function fetchUsers() {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('users')
+    .select('*')
+    .order('created_at', { ascending: false });
+}
+
+export async function fetchUserById(id: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .single();
+}
+
+export async function createUser(user: Database['public']['Tables']['users']['Insert']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('users')
+    .insert(user)
+    .select()
+    .single();
+}
+
+export async function updateUser(id: string, updates: Database['public']['Tables']['users']['Update']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('users')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+}
+
+export async function deleteUser(id: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('users')
+    .delete()
+    .eq('id', id);
+}
+
+// Leads CRUD
+export async function fetchLeads(userId?: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  let query = supabase
+    .from('leads')
+    .select('*, chatbots(name)')
+    .order('created_at', { ascending: false });
+  
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+  
+  return await query;
+}
+
+export async function createLead(lead: Database['public']['Tables']['leads']['Insert']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('leads')
+    .insert(lead)
+    .select()
+    .single();
+}
+
+export async function updateLead(id: string, updates: Database['public']['Tables']['leads']['Update']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('leads')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+}
+
+export async function deleteLead(id: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('leads')
+    .delete()
+    .eq('id', id);
+}
+
+// Bookings CRUD
+export async function fetchBookings(userId?: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  let query = supabase
+    .from('bookings')
+    .select('*')
+    .order('booking_date', { ascending: true });
+  
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+  
+  return await query;
+}
+
+export async function createBooking(booking: Database['public']['Tables']['bookings']['Insert']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('bookings')
+    .insert(booking)
+    .select()
+    .single();
+}
+
+export async function updateBooking(id: string, updates: Database['public']['Tables']['bookings']['Update']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('bookings')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+}
+
+export async function deleteBooking(id: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('bookings')
+    .delete()
+    .eq('id', id);
+}
+
+// Payments CRUD
+export async function fetchPayments(userId?: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  let query = supabase
+    .from('payments')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+  
+  return await query;
+}
+
+export async function createPayment(payment: Database['public']['Tables']['payments']['Insert']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('payments')
+    .insert(payment)
+    .select()
+    .single();
+}
+
+export async function updatePayment(id: string, updates: Database['public']['Tables']['payments']['Update']) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  
+  return await supabase
+    .from('payments')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
 }
 
 // Auth helpers
