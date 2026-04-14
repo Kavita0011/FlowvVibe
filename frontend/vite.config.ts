@@ -11,25 +11,9 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    minify: 'terser',
+    minify: 'esbuild',
     sourcemap: false,
-    ssr: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-flow': ['@xyflow/react'],
-          'vendor-state': ['zustand'],
-          'vendor-ui': ['lucide-react'],
-        },
-      },
-    },
     chunkSizeWarningLimit: 500,
-    terserOptions: {
-      compress: {
-        drop_console: true,
-      },
-    },
   },
   esbuild: {
     platform: 'browser',
