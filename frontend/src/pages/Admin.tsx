@@ -7,14 +7,24 @@ import {
   Settings, Key, Copy, Check, ChevronDown, LogOut, TrendingUp,
   MessageCircle, PieChart, Activity, CreditCard, Wallet
 } from 'lucide-react';
-import { fetchUsers, fetchChatbots, fetchPayments, fetchLeads, fetchConversations } from '../lib/supabase';
-import type { Database } from '../types/supabase';
+import { 
+  fetchUsers, 
+  fetchChatbots, 
+  fetchPayments, 
+  fetchLeads, 
+  fetchConversations,
+  type User,
+  type Chatbot,
+  type Payment,
+  type Lead,
+  type Conversation
+} from '../lib/crud';
 
-type UserRow = Database['public']['Tables']['users']['Row'];
-type ChatbotRow = Database['public']['Tables']['chatbots']['Row'];
-type PaymentRow = Database['public']['Tables']['payments']['Row'];
-type LeadRow = Database['public']['Tables']['leads']['Row'];
-type ConversationRow = Database['public']['Tables']['conversations']['Row'];
+type UserRow = User;
+type ChatbotRow = Chatbot;
+type PaymentRow = Payment;
+type LeadRow = Lead;
+type ConversationRow = Conversation;
 
 export default function Admin() {
   const navigate = useNavigate();

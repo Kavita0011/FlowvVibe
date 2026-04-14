@@ -10,8 +10,16 @@ import {
   Mail, Phone, Building2, MapPin, User
 } from 'lucide-react';
 import { supabase } from '../supabase';
-import { fetchChatbots, fetchPayments, fetchLeads, fetchBookings, updateUser } from '../lib/supabase';
-import type { Database } from '../types/supabase';
+import { 
+  fetchChatbots, 
+  fetchPayments, 
+  fetchLeads, 
+  fetchBookings,
+  type Chatbot,
+  type Payment,
+  type Lead,
+  type Booking
+} from '../lib/crud';
 
 const planFeatures: Record<string, string[]> = {
   'free': ['1 Chatbot', '50 Conversations/month', 'Basic Analytics', 'Email Support'],
@@ -27,10 +35,10 @@ const defaultSubscriptionPlans = [
   { id: 'enterprise', name: 'Enterprise', price: 9999, features: planFeatures['enterprise'], popular: false }
 ];
 
-type ChatbotRow = Database['public']['Tables']['chatbots']['Row'];
-type PaymentRow = Database['public']['Tables']['payments']['Row'];
-type LeadRow = Database['public']['Tables']['leads']['Row'];
-type BookingRow = Database['public']['Tables']['bookings']['Row'];
+type ChatbotRow = Chatbot;
+type PaymentRow = Payment;
+type LeadRow = Lead;
+type BookingRow = Booking;
 
 const subscriptionPlans = [
   { 
