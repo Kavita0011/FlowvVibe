@@ -5,22 +5,40 @@
 
 import { supabase } from '../supabase-client';
 import { fetchWithOptions, createRecord, updateRecord, deleteRecord, type QueryOptions } from './query-builder';
-import type { Database } from '../../types/supabase';
 
-export type PricingPlan = Database['public']['Tables']['pricing_plans']['Row'];
-export type PricingPlanInsert = Database['public']['Tables']['pricing_plans']['Insert'];
-export type PricingPlanUpdate = Database['public']['Tables']['pricing_plans']['Update'];
+export interface SubscriptionTier {
+  id: string;
+  tier_key: string;
+  name: string;
+  description: string | null;
+  price: number;
+  original_price: number | null;
+  currency: string;
+  period: string;
+  is_active: boolean;
+  is_featured: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+}
 
-// ============ PRICING PLANS ============
+export interface TierFeature {
+  id: string;
+  tier_id: string;
+  feature_id: string;
+  is_included: boolean;
+  custom_limit: number | null;
+}
 
-// Fetch all pricing plans with features
+// ============ SUBSCRIPTION TIERS ============
+
+// Fetch all subscription tiers with features
 export async function fetchPricingPlansWithFeatures(activeOnly = true) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
 
   let query = supabase
-    .from('pricing_plans')
-    .select('*, features:plan_features(*)')
-    .order('price', { ascending: true });
+    .from('subscription_tiers')
+    .select('*')
+    .order('sort_order', { ascending: true });
 
   if (activeOnly) {
     query = query.eq('is_active', true);
