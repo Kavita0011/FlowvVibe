@@ -118,4 +118,7 @@ export function subscribeToConversations(chatbotId: string, callback: (payload: 
     .subscribe();
 }
 
-export default supabase;
+// export default supabase;
+export const fetchPaymentMethods = async (activeOnly = false) => {
+  // ... rest of your code
+};
