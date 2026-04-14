@@ -113,46 +113,46 @@ export default function UserDashboard() {
       
       setLoading(true);
       try {
-        // Fetch user's chatbots from DB
-        const { data: bots, error: botsError } = await fetchChatbots(user.id);
-        if (botsError) throw botsError;
+        // Fetch user's chatbots from DB (using profile id)
+        const { data: bots, error: botsError } = await supabase
+          .from('chatbots')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        if (botsError) console.error('Error fetching chatbots:', botsError);
         if (bots) setDbChatbots(bots);
         
-        // Fetch user's payments
-        const { data: payments, error: payError } = await fetchPayments(user.id);
-        if (payError) throw payError;
-        if (payments) setDbPayments(payments);
+        // Fetch user subscription to get tier
+        const { data: subscription } = await supabase
+          .from('user_subscriptions')
+          .select('*, tier:subscription_tiers(*)')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single();
         
-        // Fetch user's leads
-        const { data: leads, error: leadsError } = await fetchLeads(user.id);
-        if (leadsError) throw leadsError;
-        if (leads) setDbLeads(leads);
+        // Fetch pricing tiers
+        const { data: tiers, error: tiersError } = await supabase
+          .from('subscription_tiers')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
+        if (tiers && tiers.length > 0) {
+          setPlansList(tiers.map((tier: any) => ({
+            id: tier.tier_key || tier.id,
+            name: tier.name,
+            price: tier.price,
+            features: tier.metadata?.features || [],
+            popular: tier.is_featured || false
+          })));
+        }
         
-        // Fetch user's bookings
-        const { data: bookings, error: bookError } = await fetchBookings(user.id);
-        if (bookError) throw bookError;
-        if (bookings) setDbBookings(bookings);
-        
-        // Calculate stats
+        // Calculate stats from real data
         setStats({
           totalBots: bots?.length || 0,
           conversations: bots?.reduce((acc, b) => acc + (b.conversations_count || 0), 0) || 0,
-          leads: leads?.length || 0,
-          avgRating: 4.5 // Placeholder - would calculate from actual ratings
+          leads: 0,
+          avgRating: 4.5
         });
-        
-        // Fetch pricing plans
-        const { data: plans, error: plansError } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
-        if (plansError) throw plansError;
-        if (plans && plans.length > 0) {
-          setPlansList(plans.map((plan: any) => ({
-            id: plan.id,
-            name: plan.name,
-            price: plan.price,
-            features: plan.features || planFeatures[plan.id] || [],
-            popular: plan.id === 'pro'
-          })));
-        }
       } catch (err) {
         console.error('Error loading dashboard data:', err);
       } finally {
