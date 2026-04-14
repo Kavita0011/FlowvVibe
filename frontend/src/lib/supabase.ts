@@ -2,9 +2,19 @@
 import { supabase } from './supabase-client';
 export { supabase, isSupabaseConfigured } from './supabase-client';
 
+// Payment Methods CRUD (Admin only) - exported for chatbotStore
+export async function fetchPaymentMethods(activeOnly = false) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+
+  let query = supabase.from('payment_methods').select('*').order('created_at', { ascending: false });
+  if (activeOnly) {
+    query = query.eq('is_active', true);
+  }
+  return await query;
+}
+
 // Re-export all CRUD operations from organized files
 export * from './crud';
-
 // Auth helpers
 export async function signInWithPassword(email: string, password: string) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
@@ -35,17 +45,6 @@ export async function getCurrentUser() {
 export async function getSession() {
   if (!supabase) return { data: { session: null }, error: new Error('Supabase not configured') };
   return await supabase.auth.getSession();
-}
-
-// Payment Methods CRUD (Admin only) - exported for chatbotStore
-export async function fetchPaymentMethods(activeOnly = false) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-
-  let query = supabase.from('payment_methods').select('*').order('created_at', { ascending: false });
-  if (activeOnly) {
-    query = query.eq('is_active', true);
-  }
-  return await query;
 }
 
 export async function createPaymentMethod(method: any) {
