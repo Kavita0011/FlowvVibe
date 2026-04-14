@@ -203,6 +203,3 @@ export async function updatePricingPlan(id: string, updates: any) {
 export async function deletePricingPlan(id: string) {
   return { data: null, error: new Error('Not implemented in demo mode') };
 }
-
-
-
