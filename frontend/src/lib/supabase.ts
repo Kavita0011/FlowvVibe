@@ -132,5 +132,4 @@ export function subscribeToConversations(chatbotId: string, callback: (payload: 
     .subscribe();
 }
 
-export { supabase };
 export default supabase;
