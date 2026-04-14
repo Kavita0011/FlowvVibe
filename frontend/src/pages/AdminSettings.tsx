@@ -9,7 +9,7 @@ import {
   Save, RefreshCw, Activity, UserCheck, UserX, Search,
   MoreVertical, ChevronDown
 } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from '../lib/supabase';
 
 // Pricing plans with variations
 const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string; saleReason?: string }[] = [

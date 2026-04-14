@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabase-client';
 
 // Query options interface for flexible querying
 export interface QueryOptions {

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabase-client';
 import type { Database } from '../../types/supabase';
 
 export type Chatbot = Database['public']['Tables']['chatbots']['Row'];
@@ -120,12 +120,12 @@ export async function updateChatbotPRD(id: string, prd: any) {
 export async function incrementChatbotViews(id: string) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
   
-  return await supabase.rpc('increment_views', { chatbot_id: id });
+  return await (supabase as any).rpc('increment_views', { chatbot_id: id });
 }
 
 // Increment conversation count
 export async function incrementChatbotConversations(id: string) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
   
-  return await supabase.rpc('increment_conversations', { chatbot_id: id });
+  return await (supabase as any).rpc('increment_conversations', { chatbot_id: id });
 }

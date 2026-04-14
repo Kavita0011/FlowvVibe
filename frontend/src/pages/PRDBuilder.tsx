@@ -7,7 +7,7 @@ import {
   Clock, FileText, Plus, Trash2, Wand2, Loader2, Send,
   Briefcase, Target, Heart, Lightbulb, Zap, Globe, Mail, Phone
 } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from '../lib/supabase';
 import type { PRD, FAQ } from '../types';
 
 const industryTemplates: Record<string, Partial<PRD>> = {

@@ -3,7 +3,7 @@
  * Uses query-builder for flexible, maintainable code
  */
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabase-client';
 import { 
   fetchWithOptions, 
   fetchPaginated, 

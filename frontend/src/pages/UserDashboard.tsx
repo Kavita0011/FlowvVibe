@@ -9,7 +9,7 @@ import {
   ChevronRight, Zap, Star, Check, AlertCircle, Play, Pause, Trash2,
   Mail, Phone, Building2, MapPin, User
 } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from '../lib/supabase';
 import { 
   fetchChatbots, 
   fetchPayments, 

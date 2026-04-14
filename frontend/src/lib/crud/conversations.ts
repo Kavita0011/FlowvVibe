@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabase-client';
 import type { Database } from '../../types/supabase';
 
 export type Conversation = Database['public']['Tables']['conversations']['Row'];

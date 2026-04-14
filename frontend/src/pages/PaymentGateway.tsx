@@ -6,7 +6,7 @@ import {
   ArrowLeft, CreditCard, Smartphone, Building2, Lock, Check, 
   Loader2, CheckCircle, Shield, Download, FileText, Copy
 } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from '../lib/supabase';
 
 const ADDONS_DATA = [
   { id: 'bookings', name: 'Booking System', price: 499, features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'] },

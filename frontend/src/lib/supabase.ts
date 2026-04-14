@@ -1,20 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/supabase';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('Supabase credentials not configured. Using demo mode.');
-}
-
-// Create Supabase client
-export const supabase = supabaseUrl && supabaseKey 
-  ? createClient<Database>(supabaseUrl, supabaseKey)
-  : null;
-
-// Helper to check if Supabase is configured
-export const isSupabaseConfigured = () => !!supabase;
+// Import and re-export the Supabase client (separate file to avoid circular imports)
+import { supabase } from './supabase-client';
+export { supabase, isSupabaseConfigured } from './supabase-client';
 
 // Re-export all CRUD operations from organized files
 export * from './crud';
@@ -49,6 +35,58 @@ export async function getCurrentUser() {
 export async function getSession() {
   if (!supabase) return { data: { session: null }, error: new Error('Supabase not configured') };
   return await supabase.auth.getSession();
+}
+
+// Payment Methods CRUD (Admin only)
+export async function fetchPaymentMethods(activeOnly = false) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+
+  let query = supabase.from('payment_methods').select('*').order('created_at', { ascending: false });
+  if (activeOnly) {
+    query = query.eq('is_active', true);
+  }
+  return await query;
+}
+
+export async function createPaymentMethod(method: any) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  return await supabase.from('payment_methods').insert(method).select().single();
+}
+
+export async function updatePaymentMethod(id: string, updates: any) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  return await supabase.from('payment_methods').update(updates).eq('id', id).select().single();
+}
+
+export async function deletePaymentMethod(id: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  return await supabase.from('payment_methods').delete().eq('id', id);
+}
+
+// Pricing Plans CRUD
+export async function fetchPricingPlans(activeOnly = true) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+
+  let query = supabase.from('pricing_plans').select('*').order('price', { ascending: true });
+  if (activeOnly) {
+    query = query.eq('is_active', true);
+  }
+  return await query;
+}
+
+export async function createPricingPlan(plan: any) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  return await supabase.from('pricing_plans').insert(plan).select().single();
+}
+
+export async function updatePricingPlan(id: string, updates: any) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  return await supabase.from('pricing_plans').update(updates).eq('id', id).select().single();
+}
+
+export async function deletePricingPlan(id: string) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  return await supabase.from('pricing_plans').delete().eq('id', id);
 }
 
 // Realtime subscriptions

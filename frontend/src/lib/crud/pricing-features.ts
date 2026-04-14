@@ -3,7 +3,7 @@
  * Handles pricing plans, features, and subscription tiers
  */
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabase-client';
 import { fetchWithOptions, createRecord, updateRecord, deleteRecord, type QueryOptions } from './query-builder';
 import type { Database } from '../../types/supabase';
 

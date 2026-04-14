@@ -3,7 +3,7 @@
  * Handles complex aggregations, reports, and admin-specific operations
  */
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabase-client';
 import { fetchWithOptions, fetchPaginated, countRecords, type QueryOptions } from './query-builder';
 
 // ============ ADMIN DASHBOARD STATS ============
