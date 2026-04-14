@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { cn } from '../utils/cn';
@@ -7,26 +7,14 @@ import {
   Settings, Key, Copy, Check, ChevronDown, LogOut, TrendingUp,
   MessageCircle, PieChart, Activity, CreditCard, Wallet
 } from 'lucide-react';
+import { fetchUsers, fetchChatbots, fetchPayments, fetchLeads, fetchConversations } from '../lib/supabase';
+import type { Database } from '../types/supabase';
 
-const stats = [
-  { label: 'Total Users', value: '1,234', change: '+12%', icon: Users },
-  { label: 'Active Chats', value: '456', change: '+8%', icon: MessageCircle },
-  { label: 'Messages Today', value: '12,345', change: '+24%', icon: MessageSquare },
-  { label: 'Revenue', value: '₹45,678', change: '+18%', icon: DollarSign }
-];
-
-const recentActivity = [
-  { user: 'Rahul S.', action: 'Created new bot', time: '2 min ago' },
-  { user: 'Priya P.', action: 'Upgraded to Pro', time: '15 min ago' },
-  { user: 'Amit K.', action: 'Added FAQ', time: '1 hour ago' },
-  { user: 'Sneha R.', action: 'Started free trial', time: '2 hours ago' }
-];
-
-const leads = [
-  { name: 'Rahul Sharma', email: 'rahul@shopright.in', phone: '+91 98765 43210', plan: 'Pro', date: 'Today' },
-  { name: 'Priya Patel', email: 'priya@healthplus.in', phone: '+91 98765 43211', plan: 'Pro', date: 'Today' },
-  { name: 'Amit Kumar', email: 'amit@spicegarden.in', phone: '+91 98765 43212', plan: 'Starter', date: 'Yesterday' }
-];
+type UserRow = Database['public']['Tables']['users']['Row'];
+type ChatbotRow = Database['public']['Tables']['chatbots']['Row'];
+type PaymentRow = Database['public']['Tables']['payments']['Row'];
+type LeadRow = Database['public']['Tables']['leads']['Row'];
+type ConversationRow = Database['public']['Tables']['conversations']['Row'];
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -35,6 +23,22 @@ export default function Admin() {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Real data from database
+  const [dbUsers, setDbUsers] = useState<UserRow[]>([]);
+  const [dbChatbots, setDbChatbots] = useState<ChatbotRow[]>([]);
+  const [dbPayments, setDbPayments] = useState<PaymentRow[]>([]);
+  const [dbLeads, setDbLeads] = useState<LeadRow[]>([]);
+  const [dbConversations, setDbConversations] = useState<ConversationRow[]>([]);
+  
+  // Stats
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeChats: 0,
+    messagesToday: 0,
+    revenue: 0
+  });
 
   // Load credentials from localStorage or use defaults
   const [adminCredentials, setAdminCredentials] = useState(() => {
@@ -93,6 +97,58 @@ export default function Admin() {
   const handleChange = (field: string, value: string) => {
     setEditableCredentials(prev => ({ ...prev, [field]: value }));
   };
+
+  // Fetch real data from database
+  useEffect(() => {
+    async function loadAdminData() {
+      if (!user?.id) return;
+      
+      setLoading(true);
+      try {
+        // Fetch all users
+        const { data: users, error: usersError } = await fetchUsers();
+        if (usersError) throw usersError;
+        if (users) setDbUsers(users);
+        
+        // Fetch all chatbots
+        const { data: chatbots, error: botsError } = await fetchChatbots();
+        if (botsError) throw botsError;
+        if (chatbots) setDbChatbots(chatbots);
+        
+        // Fetch all payments
+        const { data: payments, error: payError } = await fetchPayments();
+        if (payError) throw payError;
+        if (payments) setDbPayments(payments);
+        
+        // Fetch all leads
+        const { data: leads, error: leadsError } = await fetchLeads();
+        if (leadsError) throw leadsError;
+        if (leads) setDbLeads(leads);
+        
+        // Fetch recent conversations
+        const { data: conversations, error: convError } = await fetchConversations();
+        if (convError) throw convError;
+        if (conversations) setDbConversations(conversations);
+        
+        // Calculate stats
+        const totalRevenue = payments?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0;
+        const activeConversations = conversations?.filter(c => c.status === 'active').length || 0;
+        
+        setStats({
+          totalUsers: users?.length || 0,
+          activeChats: activeConversations,
+          messagesToday: conversations?.length || 0,
+          revenue: totalRevenue
+        });
+      } catch (err) {
+        console.error('Error loading admin data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadAdminData();
+  }, [user?.id]);
 
   const isAdmin = user?.role === 'admin' || user?.email?.includes('admin');
 
@@ -174,34 +230,71 @@ export default function Admin() {
         <div className="flex-1 p-8">
           {activeTab === 'dashboard' && (
             <>
+              {loading && (
+                <div className="text-center py-4 mb-4">
+                  <p className="text-slate-400">Loading dashboard data...</p>
+                </div>
+              )}
+              
               <div className="grid md:grid-cols-4 gap-6 mb-8">
-                {stats.map((stat, i) => (
-                  <div key={i} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                    <div className="flex items-center justify-between mb-4">
-                      <stat.icon className="w-8 h-8 text-cyan-400" />
-                      <span className="text-green-400 text-sm flex items-center gap-1">
-                        <TrendingUp className="w-4 h-4" /> {stat.change}
-                      </span>
-                    </div>
-                    <p className="text-3xl font-bold text-white">{stat.value}</p>
-                    <p className="text-slate-400 text-sm">{stat.label}</p>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <Users className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +12%
+                    </span>
                   </div>
-                ))}
+                  <p className="text-3xl font-bold text-white">{stats.totalUsers.toLocaleString()}</p>
+                  <p className="text-slate-400 text-sm">Total Users</p>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <MessageCircle className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +8%
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">{stats.activeChats}</p>
+                  <p className="text-slate-400 text-sm">Active Chats</p>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <MessageSquare className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +24%
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">{stats.messagesToday.toLocaleString()}</p>
+                  <p className="text-slate-400 text-sm">Conversations</p>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <DollarSign className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +18%
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">₹{stats.revenue.toLocaleString()}</p>
+                  <p className="text-slate-400 text-sm">Revenue</p>
+                </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                  <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
+                  <h3 className="text-lg font-semibold text-white mb-4">Recent Users</h3>
                   <div className="space-y-3">
-                    {recentActivity.map((activity, i) => (
+                    {dbUsers.slice(0, 5).map((u, i) => (
                       <div key={i} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
                         <div>
-                          <p className="text-white">{activity.user}</p>
-                          <p className="text-slate-400 text-sm">{activity.action}</p>
+                          <p className="text-white">{u.display_name || u.email}</p>
+                          <p className="text-slate-400 text-sm capitalize">{u.subscription_tier} • {u.subscription_status}</p>
                         </div>
-                        <span className="text-slate-500 text-sm">{activity.time}</span>
+                        <span className="text-slate-500 text-sm">{new Date(u.created_at).toLocaleDateString()}</span>
                       </div>
                     ))}
+                    {dbUsers.length === 0 && (
+                      <p className="text-slate-400 text-center py-4">No users found</p>
+                    )}
                   </div>
                 </div>
 
@@ -209,17 +302,18 @@ export default function Admin() {
                   <h3 className="text-lg font-semibold text-white mb-4">Subscription Distribution</h3>
                   <div className="space-y-4">
                     {[
-                      { label: 'Free', value: 800, color: 'bg-slate-500' },
-                      { label: 'Pro', value: 350, color: 'bg-cyan-500' },
-                      { label: 'Enterprise', value: 84, color: 'bg-purple-500' }
+                      { label: 'Free', count: dbUsers.filter(u => u.subscription_tier === 'free').length, color: 'bg-slate-500' },
+                      { label: 'Starter', count: dbUsers.filter(u => u.subscription_tier === 'starter').length, color: 'bg-blue-500' },
+                      { label: 'Pro', count: dbUsers.filter(u => u.subscription_tier === 'pro').length, color: 'bg-cyan-500' },
+                      { label: 'Enterprise', count: dbUsers.filter(u => u.subscription_tier === 'enterprise').length, color: 'bg-purple-500' }
                     ].map((item, i) => (
                       <div key={i}>
                         <div className="flex justify-between text-sm mb-1">
                           <span className="text-slate-400">{item.label}</span>
-                          <span className="text-white">{item.value} users</span>
+                          <span className="text-white">{item.count} users</span>
                         </div>
                         <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                          <div className={cn("h-full rounded-full", item.color)} style={{ width: `${(item.value / 1234) * 100}%` }} />
+                          <div className={cn("h-full rounded-full", item.color)} style={{ width: `${dbUsers.length > 0 ? (item.count / dbUsers.length) * 100 : 0}%` }} />
                         </div>
                       </div>
                     ))}
@@ -407,7 +501,7 @@ export default function Admin() {
 
           {activeTab === 'leads' && (
             <>
-              <h1 className="text-2xl font-bold text-white mb-8">Recent Leads</h1>
+              <h1 className="text-2xl font-bold text-white mb-8">Recent Leads ({dbLeads.length})</h1>
               <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
                 <table className="w-full">
                   <thead className="bg-slate-700/50">
@@ -415,27 +509,39 @@ export default function Admin() {
                       <th className="px-6 py-3 text-left text-slate-400 text-sm">Name</th>
                       <th className="px-6 py-3 text-left text-slate-400 text-sm">Email</th>
                       <th className="px-6 py-3 text-left text-slate-400 text-sm">Phone</th>
-                      <th className="px-6 py-3 text-left text-slate-400 text-sm">Plan</th>
+                      <th className="px-6 py-3 text-left text-slate-400 text-sm">Interest</th>
+                      <th className="px-6 py-3 text-left text-slate-400 text-sm">Status</th>
                       <th className="px-6 py-3 text-left text-slate-400 text-sm">Date</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {leads.map((lead, i) => (
-                      <tr key={i} className="border-t border-slate-700">
-                        <td className="px-6 py-4 text-white">{lead.name}</td>
-                        <td className="px-6 py-4 text-slate-400">{lead.email}</td>
-                        <td className="px-6 py-4 text-slate-400">{lead.phone}</td>
-                        <td className="px-6 py-4">
-                          <span className={cn(
-                            "px-2 py-1 rounded-full text-xs",
-                            lead.plan === 'Pro' ? "bg-cyan-500/20 text-cyan-400" : "bg-slate-500/20 text-slate-400"
-                          )}>
-                            {lead.plan}
-                          </span>
+                    {dbLeads.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
+                          No leads found. Leads will appear when users interact with chatbots.
                         </td>
-                        <td className="px-6 py-4 text-slate-400">{lead.date}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      dbLeads.map((lead, i) => (
+                        <tr key={i} className="border-t border-slate-700">
+                          <td className="px-6 py-4 text-white">{lead.name || 'N/A'}</td>
+                          <td className="px-6 py-4 text-slate-400">{lead.email || 'N/A'}</td>
+                          <td className="px-6 py-4 text-slate-400">{lead.phone || 'N/A'}</td>
+                          <td className="px-6 py-4 text-slate-400">{lead.interest || 'N/A'}</td>
+                          <td className="px-6 py-4">
+                            <span className={cn(
+                              "px-2 py-1 rounded-full text-xs",
+                              lead.status === 'qualified' ? "bg-green-500/20 text-green-400" : 
+                              lead.status === 'new' ? "bg-cyan-500/20 text-cyan-400" : 
+                              "bg-slate-500/20 text-slate-400"
+                            )}>
+                              {lead.status || 'new'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-400">{new Date(lead.created_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -10,6 +10,8 @@ import {
   Mail, Phone, Building2, MapPin, User
 } from 'lucide-react';
 import { supabase } from '../supabase';
+import { fetchChatbots, fetchPayments, fetchLeads, fetchBookings, updateUser } from '../lib/supabase';
+import type { Database } from '../types/supabase';
 
 const planFeatures: Record<string, string[]> = {
   'free': ['1 Chatbot', '50 Conversations/month', 'Basic Analytics', 'Email Support'],
@@ -25,18 +27,10 @@ const defaultSubscriptionPlans = [
   { id: 'enterprise', name: 'Enterprise', price: 9999, features: planFeatures['enterprise'], popular: false }
 ];
 
-const stats = [
-  { label: 'Total Bots', value: '3', icon: Bot, change: '+1' },
-  { label: 'Conversations', value: '1,234', icon: MessageSquare, change: '+24%' },
-  { label: 'Leads Collected', value: '567', icon: Users, change: '+12%' },
-  { label: 'Avg Rating', value: '4.8', icon: Star, change: '+0.2' }
-];
-
-const demoBots = [
-  { id: '1', name: 'Customer Support Bot', industry: 'E-commerce', status: 'active', conversations: 450, leads: 120 },
-  { id: '2', name: 'Sales Assistant', industry: 'Real Estate', status: 'active', conversations: 320, leads: 89 },
-  { id: '3', name: 'HR Bot', industry: 'Healthcare', status: 'paused', conversations: 180, leads: 45 }
-];
+type ChatbotRow = Database['public']['Tables']['chatbots']['Row'];
+type PaymentRow = Database['public']['Tables']['payments']['Row'];
+type LeadRow = Database['public']['Tables']['leads']['Row'];
+type BookingRow = Database['public']['Tables']['bookings']['Row'];
 
 const subscriptionPlans = [
   { 
@@ -89,31 +83,84 @@ export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>(defaultSubscriptionPlans);
+  const [dbChatbots, setDbChatbots] = useState<ChatbotRow[]>([]);
+  const [dbPayments, setDbPayments] = useState<PaymentRow[]>([]);
+  const [dbLeads, setDbLeads] = useState<LeadRow[]>([]);
+  const [dbBookings, setDbBookings] = useState<BookingRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    totalBots: 0,
+    conversations: 0,
+    leads: 0,
+    avgRating: 0
+  });
   const upgradeClicked = () => navigate('/pricing');
   
   // Get user's bots (or all bots if admin)
   const userBots = getUserBots();
 
   useEffect(() => {
-    async function fetchPlans() {
+    async function loadData() {
+      if (!user?.id) return;
+      
+      setLoading(true);
       try {
-        const { data, error } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
-        if (error) throw error;
-        if (data && data.length > 0) {
-          setSubscriptionPlans(data.map((plan: any) => ({
+        // Fetch user's chatbots from DB
+        const { data: bots, error: botsError } = await fetchChatbots(user.id);
+        if (botsError) throw botsError;
+        if (bots) setDbChatbots(bots);
+        
+        // Fetch user's payments
+        const { data: payments, error: payError } = await fetchPayments(user.id);
+        if (payError) throw payError;
+        if (payments) setDbPayments(payments);
+        
+        // Fetch user's leads
+        const { data: leads, error: leadsError } = await fetchLeads(user.id);
+        if (leadsError) throw leadsError;
+        if (leads) setDbLeads(leads);
+        
+        // Fetch user's bookings
+        const { data: bookings, error: bookError } = await fetchBookings(user.id);
+        if (bookError) throw bookError;
+        if (bookings) setDbBookings(bookings);
+        
+        // Calculate stats
+        setStats({
+          totalBots: bots?.length || 0,
+          conversations: bots?.reduce((acc, b) => acc + (b.conversations_count || 0), 0) || 0,
+          leads: leads?.length || 0,
+          avgRating: 4.5 // Placeholder - would calculate from actual ratings
+        });
+        
+        // Fetch pricing plans
+        const { data: plans, error: plansError } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
+        if (plansError) throw plansError;
+        if (plans && plans.length > 0) {
+          setSubscriptionPlans(plans.map((plan: any) => ({
             id: plan.id,
+            name: plan.name,
+            price: plan.price,
+            features: plan.features || planFeatures[plan.id] || [],
             popular: plan.id === 'pro'
           })));
         }
       } catch (err) {
-        console.log('Using default pricing');
+        console.error('Error loading dashboard data:', err);
+      } finally {
+        setLoading(false);
       }
     }
-    fetchPlans();
-  }, []);
+    
+    loadData();
+  }, [user?.id]);
 
-  const userPayments = payments.filter(p => p.userId === user?.id);
-  const userChatbots = chatbots.filter(c => c.userId === user?.id);
+  const userPayments = dbPayments.length > 0 ? dbPayments : payments.filter(p => p.userId === user?.id);
+  const userChatbots = dbChatbots.length > 0 ? dbChatbots : chatbots.filter(c => c.userId === user?.id);
+  
+  // Calculate totals from real data
+  const totalSpent = dbPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+  const completedPayments = dbPayments.filter(p => p.status === 'completed').length;
 
   const handleLogout = () => {
     logout();
@@ -393,6 +440,55 @@ export default function UserDashboard() {
             <>
               <h1 className="text-2xl font-bold text-white mb-8">Payment History</h1>
 
+              <div className="grid md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <Bot className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +{stats.totalBots > 0 ? '1' : '0'}
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">{stats.totalBots}</p>
+                  <p className="text-slate-400 text-sm">Total Bots</p>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <MessageSquare className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +24%
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">{stats.conversations.toLocaleString()}</p>
+                  <p className="text-slate-400 text-sm">Conversations</p>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <Users className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +12%
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">{stats.leads}</p>
+                  <p className="text-slate-400 text-sm">Leads Collected</p>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <Star className="w-8 h-8 text-cyan-400" />
+                    <span className="text-green-400 text-sm flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4" /> +0.2
+                    </span>
+                  </div>
+                  <p className="text-3xl font-bold text-white">{stats.avgRating}</p>
+                  <p className="text-slate-400 text-sm">Avg Rating</p>
+                </div>
+              </div>
+              
+              {loading && (
+                <div className="text-center py-4">
+                  <p className="text-slate-400">Loading data...</p>
+                </div>
+              )}
+
               <div className="grid md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
                   <p className="text-slate-400 text-sm mb-1">Current Plan</p>
@@ -424,24 +520,37 @@ export default function UserDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {userPayments.map((payment) => (
-                      <tr key={payment.id} className="border-t border-slate-700">
-                        <td className="px-6 py-4 text-white">
-                          {new Date(payment.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-white capitalize">{payment.plan}</td>
-                        <td className="px-6 py-4 text-white">₹{payment.amount}</td>
-                        <td className="px-6 py-4 text-slate-400 capitalize">{payment.method}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs">
-                            {payment.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-slate-400 font-mono text-sm">
-                          {payment.transactionId}
+                    {userPayments.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
+                          No payments found. Upgrade your plan to get started.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      userPayments.map((payment: any) => (
+                        <tr key={payment.id} className="border-t border-slate-700">
+                          <td className="px-6 py-4 text-white">
+                            {new Date(payment.created_at || payment.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-white capitalize">{payment.plan}</td>
+                          <td className="px-6 py-4 text-white">₹{payment.amount}</td>
+                          <td className="px-6 py-4 text-slate-400 capitalize">{payment.method || payment.payment_method || 'UPI'}</td>
+                          <td className="px-6 py-4">
+                            <span className={cn(
+                              "px-2 py-1 rounded-full text-xs",
+                              payment.status === 'completed' ? "bg-green-500/20 text-green-400" :
+                              payment.status === 'pending' ? "bg-amber-500/20 text-amber-400" :
+                              "bg-red-500/20 text-red-400"
+                            )}>
+                              {payment.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-400 font-mono text-sm">
+                            {payment.transaction_id || payment.transactionId || 'N/A'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
