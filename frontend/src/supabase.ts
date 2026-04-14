@@ -170,3 +170,39 @@ export const config = {
 
 export { API_URL };
 
+// Payment Methods CRUD (exported for chatbotStore compatibility)
+export async function fetchPaymentMethods(activeOnly = false) {
+  return { data: [], error: null };
+}
+
+export async function createPaymentMethod(method: any) {
+  return { data: null, error: new Error('Not implemented in demo mode') };
+}
+
+export async function updatePaymentMethod(id: string, updates: any) {
+  return { data: null, error: new Error('Not implemented in demo mode') };
+}
+
+export async function deletePaymentMethod(id: string) {
+  return { data: null, error: new Error('Not implemented in demo mode') };
+}
+
+// Pricing Plans CRUD
+export async function fetchPricingPlans(activeOnly = true) {
+  return { data: [], error: null };
+}
+
+export async function createPricingPlan(plan: any) {
+  return { data: null, error: new Error('Not implemented in demo mode') };
+}
+
+export async function updatePricingPlan(id: string, updates: any) {
+  return { data: null, error: new Error('Not implemented in demo mode') };
+}
+
+export async function deletePricingPlan(id: string) {
+  return { data: null, error: new Error('Not implemented in demo mode') };
+}
+
+
+
