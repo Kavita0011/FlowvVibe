@@ -37,7 +37,7 @@ export async function getSession() {
   return await supabase.auth.getSession();
 }
 
-// Payment Methods CRUD (Admin only)
+// Payment Methods CRUD (Admin only) - exported for chatbotStore
 export async function fetchPaymentMethods(activeOnly = false) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
 
