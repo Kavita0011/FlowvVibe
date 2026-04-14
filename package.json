@@ -7,7 +7,8 @@
     "dev:backend": "npm run dev --prefix backend",
     "build": "npm run build --prefix frontend",
     "lint": "npm run lint --prefix frontend",
-    "setup:db": "psql -U postgres -d flowvibe -f backend/setup.sql"
+    "setup:db": "psql -U postgres -d flowvibe -f backend/setup.sql",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "cors": "^2.8.6",
