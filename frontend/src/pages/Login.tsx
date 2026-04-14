@@ -113,7 +113,7 @@ export default function Login() {
           role: 'user',
           isActive: true,
           createdAt: new Date(),
-          subscription: { tier: 'free', status: 'active', startDate: new Date() }
+          subscription: { tier: 'free', status: 'active', startDate: new Date(), expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
         };
         
         localStorage.setItem('user', JSON.stringify(loggedInUser));
