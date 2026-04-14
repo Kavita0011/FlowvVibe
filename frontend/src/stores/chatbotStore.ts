@@ -22,7 +22,7 @@ import {
   createPricingPlan,
   updatePricingPlan,
   deletePricingPlan
-} from '@/lib/supabase';
+} from '../lib/supabase';
 import type { Database } from '../types/supabase';
 import { 
   validateEmail, 
