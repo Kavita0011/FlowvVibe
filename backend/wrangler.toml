@@ -1,5 +1,5 @@
 name = "flowvibe-api"
-main = "src/index.ts"  # Points to your Worker entry point
+main = "worker.js"
 compatibility_date = "2024-01-01"
 
 [vars]
@@ -9,7 +9,7 @@ VITE_NEON_DATABASE_URL = "postgresql://neondb_owner:npg_LFxB7ZPqhoi6@ep-silent-p
 
 # Static Assets (Your Vite Frontend)
 [assets]
-directory = "./dist"
+directory = "../frontend/dist"
 not_found_handling = "single-page-application"
 
 # Keep these ONLY if you plan to cache specific marketplace data 
