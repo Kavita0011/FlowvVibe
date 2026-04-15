@@ -1,31 +1,26 @@
 name = "flowvibe-api"
-main = "worker.js"
+main = "src/index.ts"  # Points to your Worker entry point
 compatibility_date = "2024-01-01"
 
-# Environment variables (set in Cloudflare dashboard)
 [vars]
 ENVIRONMENT = "production"
+# Add your Supabase URL here so the worker can talk to your DB
+VITE_SUPABASE_URL = "https://mppsyxqlihmdsbrwlygz.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
-# KV Namespace for caching (optional)
+# Static Assets (Your Vite Frontend)
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+
+# Keep these ONLY if you plan to cache specific marketplace data 
+# on Cloudflare's edge. Otherwise, delete them to keep it clean.
 [[kv_namespaces]]
 binding = "PRICING"
 id = "your-pricing-kv-id"
 
-[[kv_namespaces]]
-binding = "TIERS"
-id = "your-tiers-kv-id"
-
-# D1 Database binding (optional - for future use)
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "flowvibe"
-# database_id = "your-d1-database-id"
-
-# Development configuration
+# Development Override
 [env.dev]
 name = "flowvibe-api-dev"
-
-# Production configuration  
-[env.production]
-name = "flowvibe-api"
-triggers = { crons = [] }
+[env.dev.vars]
+ENVIRONMENT = "development"
