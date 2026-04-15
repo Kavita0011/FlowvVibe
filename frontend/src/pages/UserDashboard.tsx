@@ -7,69 +7,11 @@ import {
   Bot, ArrowLeft, Plus, Settings, CreditCard, Users, MessageSquare,
   TrendingUp, Calendar, Clock, LogOut, Copy, ExternalLink, MoreVertical,
   ChevronRight, Zap, Star, Check, AlertCircle, Play, Pause, Trash2,
-  Mail, Phone, Building2, MapPin, User
+  Mail, Phone, Building2, MapPin, User, Search, Filter, RefreshCw, Eye,
+  ChevronLeft, ChevronDown
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { 
-  fetchChatbots, 
-  fetchPayments, 
-  fetchLeads, 
-  fetchBookings,
-  type Chatbot,
-  type Payment,
-  type Lead,
-  type Booking
-} from '../lib/crud';
-
-const planFeatures: Record<string, string[]> = {
-  'free': ['1 Chatbot', '50 Conversations/month', 'Basic Analytics', 'Email Support'],
-  'starter': ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
-  'pro': ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
-  'enterprise': ['Unlimited Chatbots', 'All Integrations', 'Dedicated Support', 'Custom Development', 'SLA Guarantee', 'White Label']
-};
-
-const defaultSubscriptionPlans = [
-  { id: 'free', name: 'Free', price: 0, features: planFeatures['free'], popular: false },
-  { id: 'starter', name: 'Starter', price: 999, features: planFeatures['starter'], popular: false },
-  { id: 'pro', name: 'Pro', price: 2499, features: planFeatures['pro'], popular: true },
-  { id: 'enterprise', name: 'Enterprise', price: 9999, features: planFeatures['enterprise'], popular: false }
-];
-
-type ChatbotRow = Chatbot;
-type PaymentRow = Payment;
-type LeadRow = Lead;
-type BookingRow = Booking;
-
-const subscriptionPlans = [
-  { 
-    id: 'free', 
-    name: 'Free', 
-    price: 0, 
-    features: ['1 Chatbot', '50 Conversations/month', 'Basic Analytics', 'Email Support'],
-    popular: false
-  },
-  { 
-    id: 'starter', 
-    name: 'Starter', 
-    price: 999, 
-    features: ['2 Chatbots', '500 Conversations', 'Premium Widget', 'Slack Integration'],
-    popular: false
-  },
-  { 
-    id: 'pro', 
-    name: 'Pro', 
-    price: 2499, 
-    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Priority Support', 'Advanced Analytics', 'Custom Branding', 'Export Widget'],
-    popular: true
-  },
-  { 
-    id: 'enterprise', 
-    name: 'Enterprise', 
-    price: 9999, 
-    features: ['Unlimited Chatbots', 'All Integrations', 'Dedicated Support', 'Custom Development', 'SLA Guarantee', 'White Label'],
-    popular: false
-  }
-];
+import { fetchLeadsByChatbot, updateLeadStatus, deleteLead } from '../lib/crud';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
@@ -90,10 +32,12 @@ export default function UserDashboard() {
   } = useChatbotStore();
   const [activeTab, setActiveTab] = useState('bots');
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [plansList, setPlansList] = useState<any[]>(defaultSubscriptionPlans);
+  const [plansList, setPlansList] = useState<any[]>([]);
   const [dbChatbots, setDbChatbots] = useState<ChatbotRow[]>([]);
   const [dbPayments, setDbPayments] = useState<PaymentRow[]>([]);
   const [dbLeads, setDbLeads] = useState<LeadRow[]>([]);
+  const [leadSearch, setLeadSearch] = useState('');
+  const [leadFilter, setLeadFilter] = useState('all');
   const [dbBookings, setDbBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
@@ -146,11 +90,26 @@ export default function UserDashboard() {
           })));
         }
         
+        // Fetch leads for user's chatbots
+        let leads: LeadRow[] = [];
+        if (bots && bots.length > 0) {
+          const botIds = bots.map(b => b.id);
+          const { data: leadsData, error: leadsError } = await supabase
+            .from('leads')
+            .select('*')
+            .in('chatbot_id', botIds)
+            .order('created_at', { ascending: false });
+          if (!leadsError && leadsData) {
+            leads = leadsData;
+            setDbLeads(leads);
+          }
+        }
+
         // Calculate stats from real data
         setStats({
           totalBots: bots?.length || 0,
           conversations: bots?.reduce((acc, b) => acc + (b.conversations_count || 0), 0) || 0,
-          leads: 0,
+          leads: leads.length,
           avgRating: 4.5
         });
       } catch (err) {
@@ -244,6 +203,7 @@ export default function UserDashboard() {
           <div className="space-y-1">
             {[
               { id: 'bots', label: 'My Chatbots', icon: Bot },
+              { id: 'leads', label: 'My Leads', icon: Users },
               { id: 'payments', label: 'Payments', icon: CreditCard },
               { id: 'settings', label: 'Settings', icon: Settings }
             ].map((item) => (
@@ -710,7 +670,7 @@ onClick={upgradeClicked}
               </button>
             </div>
             <div className="p-6 grid md:grid-cols-3 gap-6">
-              {subscriptionPlans.map((plan) => (
+              {plansList.length > 0 ? plansList.map((plan) => (
                 <div 
                   key={plan.id}
                   className={cn(
@@ -748,7 +708,11 @@ onClick={upgradeClicked}
                     {plan.price === 0 ? 'Current Plan' : `Buy for ₹${plan.price}`}
                   </button>
                 </div>
-              ))}
+              )) : (
+                <div className="col-span-3 text-center text-slate-400 py-8">
+                  Loading plans...
+                </div>
+              )}
             </div>
             
           </div>
