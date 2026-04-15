@@ -6,7 +6,7 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 export default defineConfig({
   plugins: [react(), cloudflare()],
-  base: './', // Add this line
+  base: './', // Added this line
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
