@@ -2,14 +2,12 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-import { cloudflare } from "@cloudflare/vite-plugin";
-
 export default defineConfig({
   define: {
     'process.env': {},
   },
-  plugins: [react(), cloudflare()],
-  base: './', // Added this line
+  plugins: [react()],
+  base: './', 
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
