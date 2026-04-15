@@ -32,6 +32,7 @@ import {
   type Lead,
   type Conversation
 } from '../lib/crud';
+import { isSupabaseConfigured } from '../lib/supabase-client';
 
 type UserRow = User;
 type ChatbotRow = Chatbot;
@@ -151,38 +152,64 @@ export default function Admin() {
   useEffect(() => {
     async function loadAdminData() {
       if (!user?.id) return;
-      
+
       setLoading(true);
+      console.log('Loading admin data...');
       try {
         // Fetch all users
+        console.log('Fetching users...');
         const { data: users, error: usersError } = await fetchUsers();
-        if (usersError) throw usersError;
-        if (users) setDbUsers(users);
-        
+        if (usersError) {
+          console.error('Error fetching users:', usersError);
+        } else {
+          console.log('Users fetched:', users?.length || 0, users);
+          if (users) setDbUsers(users);
+        }
+
         // Fetch all chatbots
+        console.log('Fetching chatbots...');
         const { data: chatbots, error: botsError } = await fetchChatbots();
-        if (botsError) throw botsError;
-        if (chatbots) setDbChatbots(chatbots);
-        
+        if (botsError) {
+          console.error('Error fetching chatbots:', botsError);
+        } else {
+          console.log('Chatbots fetched:', chatbots?.length || 0, chatbots);
+          if (chatbots) setDbChatbots(chatbots);
+        }
+
         // Fetch all payments
+        console.log('Fetching payments...');
         const { data: payments, error: payError } = await fetchPayments();
-        if (payError) throw payError;
-        if (payments) setDbPayments(payments);
-        
+        if (payError) {
+          console.error('Error fetching payments:', payError);
+        } else {
+          console.log('Payments fetched:', payments?.length || 0, payments);
+          if (payments) setDbPayments(payments);
+        }
+
         // Fetch all leads
+        console.log('Fetching leads...');
         const { data: leads, error: leadsError } = await fetchLeads();
-        if (leadsError) throw leadsError;
-        if (leads) setDbLeads(leads);
-        
+        if (leadsError) {
+          console.error('Error fetching leads:', leadsError);
+        } else {
+          console.log('Leads fetched:', leads?.length || 0, leads);
+          if (leads) setDbLeads(leads);
+        }
+
         // Fetch recent conversations
+        console.log('Fetching conversations...');
         const { data: conversations, error: convError } = await fetchConversations();
-        if (convError) throw convError;
-        if (conversations) setDbConversations(conversations);
-        
+        if (convError) {
+          console.error('Error fetching conversations:', convError);
+        } else {
+          console.log('Conversations fetched:', conversations?.length || 0);
+          if (conversations) setDbConversations(conversations);
+        }
+
         // Calculate stats
         const totalRevenue = payments?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0;
         const activeConversations = conversations?.filter(c => c.status === 'active').length || 0;
-        
+
         setStats({
           totalUsers: users?.length || 0,
           activeChats: activeConversations,
@@ -195,7 +222,7 @@ export default function Admin() {
         setLoading(false);
       }
     }
-    
+
     loadAdminData();
   }, [user?.id]);
 
@@ -357,7 +384,7 @@ export default function Admin() {
       <nav className="bg-slate-800 border-b border-slate-700 px-8 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => navigate('/dashboard')}
               className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"
             >
@@ -368,7 +395,7 @@ export default function Admin() {
               <span className="text-2xl font-bold text-white">Admin Panel</span>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => {
               setUser(null);
               navigate('/');
@@ -380,6 +407,18 @@ export default function Admin() {
           </button>
         </div>
       </nav>
+
+      {/* Supabase Connection Warning */}
+      {!isSupabaseConfigured() && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-8 py-3">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-400" />
+            <p className="text-amber-400 text-sm">
+              <strong>Database not connected.</strong> Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file. CRUD operations require database connection.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex">
         <div className="w-64 bg-slate-800 border-r border-slate-700 p-4">
@@ -749,7 +788,7 @@ export default function Admin() {
                               </div>
                               <div>
                                 <p className="text-white font-medium">{lead.name || 'Unknown'}</p>
-                                <p className="text-slate-400 text-sm">From: {lead.chatbot_name || 'Chatbot'}</p>
+                                <p className="text-slate-400 text-sm">From: {dbChatbots.find(b => b.id === lead.chatbot_id)?.name || 'Chatbot'}</p>
                               </div>
                             </div>
                           </td>

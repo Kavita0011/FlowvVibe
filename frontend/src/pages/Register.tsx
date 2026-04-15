@@ -67,7 +67,7 @@ export default function Register() {
         localStorage.setItem('isAuthenticated', 'true');
         setUser(demoUser as any);
         setIsAuthenticated(true);
-        navigate('/dashboard');
+        navigate('/pricing');
         return;
       }
 
@@ -81,12 +81,12 @@ export default function Register() {
           createdAt: new Date(),
           subscription: { tier: 'free', status: 'active', startDate: new Date() }
         };
-        
+
         localStorage.setItem('user', JSON.stringify(newUser));
         localStorage.setItem('isAuthenticated', 'true');
         setUser(newUser as any);
         setIsAuthenticated(true);
-        navigate('/dashboard');
+        navigate('/pricing');
       }
     } catch (err) {
       console.error('Registration error:', err);
@@ -105,7 +105,7 @@ export default function Register() {
       localStorage.setItem('isAuthenticated', 'true');
       setUser(demoUser as any);
       setIsAuthenticated(true);
-      navigate('/dashboard');
+      navigate('/pricing');
     } finally {
       setLoading(false);
     }
