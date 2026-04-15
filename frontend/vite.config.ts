@@ -5,6 +5,9 @@ import path from 'path'
 import { cloudflare } from "@cloudflare/vite-plugin";
 
 export default defineConfig({
+  define: {
+    'process.env': {},
+  },
   plugins: [react(), cloudflare()],
   base: './', // Added this line
   resolve: {
@@ -30,5 +33,4 @@ export default defineConfig({
     port: 4173,
     host: '0.0.0.0',
   },
-  define: {},
 })

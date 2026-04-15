@@ -12,12 +12,6 @@ VITE_NEON_DATABASE_URL = "postgresql://neondb_owner:npg_LFxB7ZPqhoi6@ep-silent-p
 directory = "../frontend/dist"
 not_found_handling = "single-page-application"
 
-# Keep these ONLY if you plan to cache specific marketplace data 
-# on Cloudflare's edge. Otherwise, delete them to keep it clean.
-[[kv_namespaces]]
-binding = "PRICING"
-id = "your-pricing-kv-id"
-
 # Development Override
 [env.dev]
 name = "flowvibe-api-dev"
