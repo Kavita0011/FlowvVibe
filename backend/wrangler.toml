@@ -4,9 +4,8 @@ compatibility_date = "2024-01-01"
 
 [vars]
 ENVIRONMENT = "production"
-# Add your Supabase URL here so the worker can talk to your DB
-VITE_SUPABASE_URL = "https://mppsyxqlihmdsbrwlygz.supabase.co"
-VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+# Neon PostgreSQL Database Connection
+VITE_NEON_DATABASE_URL = "postgresql://neondb_owner:npg_LFxB7ZPqhoi6@ep-silent-paper-am8ltwpf-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 # Static Assets (Your Vite Frontend)
 [assets]
