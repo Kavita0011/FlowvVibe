@@ -32,7 +32,7 @@ import {
   type Lead,
   type Conversation
 } from '../lib/crud';
-import { isSupabaseConfigured } from '../lib/supabase-client';
+import { isDatabaseConfigured } from '../lib/db-client';
 
 type UserRow = User;
 type ChatbotRow = Chatbot;
@@ -409,12 +409,12 @@ export default function Admin() {
       </nav>
 
       {/* Supabase Connection Warning */}
-      {!isSupabaseConfigured() && (
+      {!isDatabaseConfigured() && (
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-8 py-3">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-amber-400" />
             <p className="text-amber-400 text-sm">
-              <strong>Database not connected.</strong> Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file. CRUD operations require database connection.
+              <strong>Database not connected.</strong> Please configure VITE_NEON_DATABASE_URL in your .env file. CRUD operations require database connection.
             </p>
           </div>
         </div>

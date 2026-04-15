@@ -1,12 +1,32 @@
--- FlowVibe Database Setup for Supabase
--- Run this in Supabase SQL Editor
+-- FlowVibe Database Setup for Neon
+-- Run this in Neon SQL Editor
 
 -- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. PROFILES (Linked to Supabase Auth)
+-- 2. USERS TABLE (Standalone for Neon - no built-in auth)
+CREATE TABLE IF NOT EXISTS public.users (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  email text UNIQUE NOT NULL,
+  password_hash text NOT NULL,
+  display_name text,
+  avatar_url text,
+  company_name text,
+  website text,
+  location text,
+  bio text,
+  role text DEFAULT 'user',
+  is_active boolean DEFAULT true,
+  subscription_tier text DEFAULT 'free',
+  subscription_status text DEFAULT 'active',
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  last_login_at timestamp with time zone
+);
+
+-- 3. PROFILES (Optional - can be merged with users or kept separate)
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   display_name text,
   email text,
   avatar_url text,
@@ -49,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.custom_tiers (
 -- 4. CHATBOTS
 CREATE TABLE IF NOT EXISTS public.chatbots (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   name text NOT NULL,
   description text,
   industry text,
@@ -101,7 +121,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
 -- 6. PAYMENTS & SUBSCRIPTIONS
 CREATE TABLE IF NOT EXISTS public.user_subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   tier_id text REFERENCES public.subscription_tiers(id),
   status text DEFAULT 'active',
   started_at timestamp with time zone DEFAULT now(),
@@ -115,7 +135,7 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
 
 CREATE TABLE IF NOT EXISTS public.payments (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   subscription_id uuid REFERENCES public.user_subscriptions(id),
   amount integer NOT NULL,
   currency text DEFAULT 'INR',
@@ -134,7 +154,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
 CREATE TABLE IF NOT EXISTS public.leads (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   chatbot_id uuid REFERENCES public.chatbots(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   conversation_id uuid REFERENCES public.conversations(id) ON DELETE SET NULL,
   name text,
   email text,
@@ -151,7 +171,7 @@ CREATE TABLE IF NOT EXISTS public.leads (
 CREATE TABLE IF NOT EXISTS public.bookings (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   chatbot_id uuid REFERENCES public.chatbots(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   customer_name text NOT NULL,
   customer_email text NOT NULL,
   customer_phone text,
@@ -167,7 +187,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 -- 8. AGENTS & HUMAN HANDOFF
 CREATE TABLE IF NOT EXISTS public.agents (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   email text NOT NULL,
   name text,
   online boolean DEFAULT false,
@@ -191,7 +211,7 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
 -- 9. API KEYS
 CREATE TABLE IF NOT EXISTS public.api_keys (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   name text NOT NULL,
   api_key text UNIQUE NOT NULL,
   permissions jsonb DEFAULT '["read"]'::jsonb,
@@ -204,7 +224,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
 -- 10. FEATURE ACCESS
 CREATE TABLE IF NOT EXISTS public.feature_access (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   feature text NOT NULL,
   active boolean DEFAULT false,
   expires_at timestamp with time zone,
@@ -212,71 +232,23 @@ CREATE TABLE IF NOT EXISTS public.feature_access (
   UNIQUE(user_id, feature)
 );
 
--- 11. AUTO-PROFILE TRIGGER (The "Magic" Link)
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, display_name, avatar_url)
-  VALUES (
-    new.id,
-    new.email,
-    new.raw_user_meta_data->>'display_name',
-    new.raw_user_meta_data->>'avatar_url'
-  );
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 11. ROW LEVEL SECURITY (RLS) POLICIES (Optional - for Neon, implement at application level instead)
+-- Note: Neon is standard PostgreSQL without auth.uid(). Implement authorization in your application layer.
+-- Uncomment if you want to use RLS with custom user_id checks:
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.chatbots ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.feature_access ENABLE ROW LEVEL SECURITY;
 
--- 12. ROW LEVEL SECURITY (RLS) POLICIES
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chatbots ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.feature_access ENABLE ROW LEVEL SECURITY;
-
--- Profile Policies
-CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
--- Chatbot Policies
-CREATE POLICY "Users can manage own chatbots" ON public.chatbots FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Public can view published bots" ON public.chatbots FOR SELECT USING (is_published = true);
-
--- Payment Policies
-CREATE POLICY "Users can view own payments" ON public.payments FOR SELECT USING (auth.uid() = user_id);
-
--- Lead Policies
-CREATE POLICY "Users can view own leads" ON public.leads FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can manage own leads" ON public.leads FOR ALL USING (auth.uid() = user_id);
-
--- Booking Policies
-CREATE POLICY "Users can view own bookings" ON public.bookings FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can manage own bookings" ON public.bookings FOR ALL USING (auth.uid() = user_id);
-
--- Conversation Policies
-CREATE POLICY "Users can view own conversations" ON public.conversations FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.chatbots WHERE id = chatbot_id));
-
--- Message Policies
-CREATE POLICY "Users can view messages in own conversations" ON public.messages FOR SELECT USING (
-  auth.uid() IN (SELECT user_id FROM public.chatbots WHERE id = (SELECT chatbot_id FROM public.conversations WHERE id = conversation_id))
-);
-
--- API Key Policies
-CREATE POLICY "Users can view own api keys" ON public.api_keys FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can manage own api keys" ON public.api_keys FOR ALL USING (auth.uid() = user_id);
-
--- Feature Access Policies
-CREATE POLICY "Users can view own feature access" ON public.feature_access FOR SELECT USING (auth.uid() = user_id);
-
--- 13. PERFORMANCE INDEXES
+-- 12. PERFORMANCE INDEXES
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_subscription_tier ON public.users(subscription_tier);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_subscription_tier ON public.profiles(subscription_tier);
 CREATE INDEX IF NOT EXISTS idx_chatbots_user_id ON public.chatbots(user_id);
@@ -301,7 +273,7 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON public.api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_key ON public.api_keys(api_key);
 CREATE INDEX IF NOT EXISTS idx_feature_access_user_id ON public.feature_access(user_id);
 
--- 14. SEED DATA (Pricing Plans)
+-- 13. SEED DATA (Pricing Plans)
 INSERT INTO public.subscription_tiers (id, name, price, original_price, period, description, is_featured) VALUES
 ('free', 'Free', 0, 0, 'forever', 'For testing', false),
 ('starter', 'Starter', 99900, 199900, 'one-time', 'One-time payment', false),

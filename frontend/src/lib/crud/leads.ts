@@ -1,4 +1,4 @@
-import { supabase } from '../supabase-client';
+import { query } from '../db-client';
 import type { Database } from '../../types/supabase';
 
 export type Lead = Database['public']['Tables']['leads']['Row'];
@@ -13,158 +13,231 @@ export type BookingUpdate = Database['public']['Tables']['bookings']['Update'];
 
 // Fetch leads (optionally filtered by user)
 export async function fetchLeads(userId?: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  let query = supabase
-    .from('leads')
-    .select('*, chatbots(name)')
-    .order('created_at', { ascending: false });
-  
-  if (userId) {
-    query = query.eq('user_id', userId);
+  try {
+    let queryText = 'SELECT * FROM public.leads ORDER BY created_at DESC';
+    let params: any[] = [];
+
+    if (userId) {
+      queryText = 'SELECT * FROM public.leads WHERE user_id = $1 ORDER BY created_at DESC';
+      params = [userId];
+    }
+
+    const data = await query<Lead>(queryText, params);
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
   }
-  
-  return await query;
 }
 
 // Fetch leads by chatbot
 export async function fetchLeadsByChatbot(chatbotId: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('leads')
-    .select('*')
-    .eq('chatbot_id', chatbotId)
-    .order('created_at', { ascending: false });
+  try {
+    const data = await query<Lead>('SELECT * FROM public.leads WHERE chatbot_id = $1 ORDER BY created_at DESC', [chatbotId]);
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Create new lead
 export async function createLead(lead: LeadInsert) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('leads')
-    .insert(lead)
-    .select()
-    .single();
+  try {
+    const {
+      chatbot_id,
+      user_id,
+      conversation_id,
+      name,
+      email,
+      phone,
+      interest,
+      budget,
+      timeline,
+      notes,
+      status = 'new'
+    } = lead;
+
+    const data = await query<Lead>(
+      `INSERT INTO public.leads (chatbot_id, user_id, conversation_id, name, email, phone, interest, budget, timeline, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [chatbot_id, user_id, conversation_id, name, email, phone, interest, budget, timeline, notes, status]
+    );
+    return { data: data[0] || null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Update lead
 export async function updateLead(id: string, updates: LeadUpdate) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('leads')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+  try {
+    const fields = [];
+    const values = [];
+    let paramCount = 1;
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value !== undefined) {
+        fields.push(`${key} = $${paramCount}`);
+        values.push(value);
+        paramCount++;
+      }
+    });
+
+    fields.push(`updated_at = $${paramCount}`);
+    values.push(new Date().toISOString());
+    paramCount++;
+
+    values.push(id);
+
+    const queryText = `UPDATE public.leads SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+    const data = await query<Lead>(queryText, values);
+    return { data: data[0] || null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Update lead status
 export async function updateLeadStatus(
-  id: string, 
+  id: string,
   status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
 ) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('leads')
-    .update({ 
-      status, 
-      updated_at: new Date().toISOString() 
-    })
-    .eq('id', id)
-    .select()
-    .single();
+  try {
+    const data = await query<Lead>(
+      `UPDATE public.leads
+       SET status = $1, updated_at = $2
+       WHERE id = $3
+       RETURNING *`,
+      [status, new Date().toISOString(), id]
+    );
+    return { data: data[0] || null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Delete lead
 export async function deleteLead(id: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('leads')
-    .delete()
-    .eq('id', id);
+  try {
+    await query('DELETE FROM public.leads WHERE id = $1', [id]);
+    return { error: null };
+  } catch (error) {
+    return { error };
+  }
 }
 
 // ========== BOOKINGS CRUD ==========
 
 // Fetch bookings (optionally filtered by user)
 export async function fetchBookings(userId?: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  let query = supabase
-    .from('bookings')
-    .select('*')
-    .order('booking_date', { ascending: true });
-  
-  if (userId) {
-    query = query.eq('user_id', userId);
+  try {
+    let queryText = 'SELECT * FROM public.bookings ORDER BY booking_date ASC';
+    let params: any[] = [];
+
+    if (userId) {
+      queryText = 'SELECT * FROM public.bookings WHERE user_id = $1 ORDER BY booking_date ASC';
+      params = [userId];
+    }
+
+    const data = await query<Booking>(queryText, params);
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
   }
-  
-  return await query;
 }
 
 // Fetch bookings by chatbot
 export async function fetchBookingsByChatbot(chatbotId: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('bookings')
-    .select('*')
-    .eq('chatbot_id', chatbotId)
-    .order('booking_date', { ascending: true });
+  try {
+    const data = await query<Booking>('SELECT * FROM public.bookings WHERE chatbot_id = $1 ORDER BY booking_date ASC', [chatbotId]);
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Create new booking
 export async function createBooking(booking: BookingInsert) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('bookings')
-    .insert(booking)
-    .select()
-    .single();
+  try {
+    const {
+      chatbot_id,
+      user_id,
+      customer_name,
+      customer_email,
+      customer_phone,
+      service,
+      booking_date,
+      booking_time,
+      notes,
+      status = 'pending'
+    } = booking;
+
+    const data = await query<Booking>(
+      `INSERT INTO public.bookings (chatbot_id, user_id, customer_name, customer_email, customer_phone, service, booking_date, booking_time, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [chatbot_id, user_id, customer_name, customer_email, customer_phone, service, booking_date, booking_time, notes, status]
+    );
+    return { data: data[0] || null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Update booking
 export async function updateBooking(id: string, updates: BookingUpdate) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('bookings')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+  try {
+    const fields = [];
+    const values = [];
+    let paramCount = 1;
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value !== undefined) {
+        fields.push(`${key} = $${paramCount}`);
+        values.push(value);
+        paramCount++;
+      }
+    });
+
+    fields.push(`updated_at = $${paramCount}`);
+    values.push(new Date().toISOString());
+    paramCount++;
+
+    values.push(id);
+
+    const queryText = `UPDATE public.bookings SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+    const data = await query<Booking>(queryText, values);
+    return { data: data[0] || null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Update booking status
 export async function updateBookingStatus(
-  id: string, 
+  id: string,
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
 ) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('bookings')
-    .update({ 
-      status, 
-      updated_at: new Date().toISOString() 
-    })
-    .eq('id', id)
-    .select()
-    .single();
+  try {
+    const data = await query<Booking>(
+      `UPDATE public.bookings
+       SET status = $1, updated_at = $2
+       WHERE id = $3
+       RETURNING *`,
+      [status, new Date().toISOString(), id]
+    );
+    return { data: data[0] || null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 // Delete booking
 export async function deleteBooking(id: string) {
-  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  
-  return await supabase
-    .from('bookings')
-    .delete()
-    .eq('id', id);
+  try {
+    await query('DELETE FROM public.bookings WHERE id = $1', [id]);
+    return { error: null };
+  } catch (error) {
+    return { error };
+  }
 }
