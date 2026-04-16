@@ -7,7 +7,7 @@ export default defineConfig({
     'process.env': {},
   },
   plugins: [react()],
-  base: './', 
+  base: '/', 
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

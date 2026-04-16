@@ -41,3 +41,6 @@ firebase-backup/
 
 # Widget dist
 widget/node_modules/
+
+# AI Code Review temporary files
+.ai-code-review/
