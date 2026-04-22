@@ -46,6 +46,27 @@ export default function Login() {
       return;
     }
 
+    // Test user login
+    const testEmail = import.meta.env.VITE_TEST_USER_EMAIL;
+    const testPass = import.meta.env.VITE_TEST_USER_PASSWORD;
+    if (testEmail && testPass && email === testEmail && password === testPass) {
+      const testUser: User = { 
+        id: 'test_001', 
+        email: testEmail, 
+        displayName: 'Test User', 
+        role: 'user', 
+        subscription: { tier: 'pro', status: 'active', startDate: new Date() }, 
+        createdAt: new Date(), 
+        isActive: true 
+      } as User;
+      localStorage.setItem('user', JSON.stringify(testUser));
+      localStorage.setItem('isAuthenticated', 'true');
+      setUser(testUser);
+      setIsAuthenticated(true);
+      navigate('/dashboard');
+      return;
+    }
+
     // Demo user login
     if (email === 'demo@flowvibe.ai' && password === 'demo123') {
       const demoUser: User = { 
