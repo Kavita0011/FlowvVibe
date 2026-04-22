@@ -27,10 +27,14 @@ export default function Settings() {
     sms: false
   });
 
-  const handleCopyApiKey = () => {
-    navigator.clipboard.writeText('demo-api-key-12345');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyApiKey = async () => {
+    try {
+      await navigator.clipboard.writeText('demo-api-key-12345');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const handleLogout = () => {

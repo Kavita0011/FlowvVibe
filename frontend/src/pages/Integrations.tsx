@@ -213,11 +213,15 @@ export default function Integrations() {
     }, 3000);
   };
 
-  const copyEmbedCode = () => {
+  const copyEmbedCode = async () => {
     const channel = channels.find(c => c.type === 'web');
     if (channel?.config.embedCode) {
-      navigator.clipboard.writeText(channel.config.embedCode);
-      toast.success('Embed code copied!');
+      try {
+        await navigator.clipboard.writeText(channel.config.embedCode);
+        toast.success('Embed code copied!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 

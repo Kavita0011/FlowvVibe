@@ -228,7 +228,7 @@ export default function ChatPreview() {
     speechSynthesisRef.speak(utterance);
   };
 
-  const exportWidget = () => {
+  const exportWidget = async () => {
     const widgetCode = `<script>
   (function() {
     window.FlowVibeWidget = {
@@ -241,8 +241,12 @@ export default function ChatPreview() {
   })();
 </script>`;
     
-    navigator.clipboard.writeText(widgetCode);
-    toast.success('Widget code copied to clipboard!');
+    try {
+      await navigator.clipboard.writeText(widgetCode);
+      toast.success('Widget code copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   return (

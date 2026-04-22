@@ -184,8 +184,12 @@ export const useChatbotStore = create<ChatbotState>()(
       login: async (email, password) => {
         set({ isLoading: true, error: null });
         
-        if (email === 'devappkavita@gmail.com' && password === 'kavitabisht2598@sbi') {
-          const adminUser: User = { id: 'admin_001', email: 'devappkavita@gmail.com', displayName: 'Admin', role: 'admin', isActive: true, createdAt: new Date() };
+        // Admin login via env vars (secure)
+        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+        const adminPass = import.meta.env.VITE_ADMIN_PASSWORD;
+        
+        if (adminEmail && adminPass && email === adminEmail && password === adminPass) {
+          const adminUser: User = { id: 'admin_001', email: adminEmail, displayName: 'Admin', role: 'admin', isActive: true, createdAt: new Date() };
           set({ user: adminUser, isAdmin: true, isAuthenticated: true, isLoading: false, users: DEMO_USERS, payments: DEMO_PAYMENTS });
           return true;
         }

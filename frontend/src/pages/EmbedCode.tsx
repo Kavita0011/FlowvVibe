@@ -57,15 +57,19 @@ export default function EmbedCode() {
   </button>
 </a>`;
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!hasPaidPlan) {
       navigate('/pricing');
       return;
     }
     const code = embedType === 'script' ? widgetCode : embedType === 'iframe' ? iframeCode : popupCode;
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const handleDownload = () => {

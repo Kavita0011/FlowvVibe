@@ -66,13 +66,13 @@ export default function UserDashboard() {
         if (botsError) console.error('Error fetching chatbots:', botsError);
         if (bots) setDbChatbots(bots);
         
-        // Fetch user subscription to get tier
+        // Fetch user subscription to get tier (use maybeSingle for null)
         const { data: subscription } = await supabase
           .from('user_subscriptions')
           .select('*, tier:subscription_tiers(*)')
           .eq('user_id', user.id)
           .eq('status', 'active')
-          .single();
+          .maybeSingle();
         
         // Fetch pricing tiers
         const { data: tiers, error: tiersError } = await supabase
@@ -80,7 +80,9 @@ export default function UserDashboard() {
           .select('*')
           .eq('is_active', true)
           .order('sort_order', { ascending: true });
-        if (tiers && tiers.length > 0) {
+        if (tiersError) {
+          console.error('Error fetching tiers:', tiersError);
+        } else if (tiers && tiers.length > 0) {
           setPlansList(tiers.map((tier: any) => ({
             id: tier.tier_key || tier.id,
             name: tier.name,
@@ -91,7 +93,7 @@ export default function UserDashboard() {
         }
         
         // Fetch leads for user's chatbots
-        let leads: LeadRow[] = [];
+        let leads: any[] = [];
         if (bots && bots.length > 0) {
           const botIds = bots.map(b => b.id);
           const { data: leadsData, error: leadsError } = await supabase
@@ -99,7 +101,9 @@ export default function UserDashboard() {
             .select('*')
             .in('chatbot_id', botIds)
             .order('created_at', { ascending: false });
-          if (!leadsError && leadsData) {
+          if (leadsError) {
+            console.error('Error fetching leads:', leadsError);
+          } else if (leadsData) {
             leads = leadsData;
             setDbLeads(leads);
           }

@@ -4,8 +4,6 @@ compatibility_date = "2024-01-01"
 
 [vars]
 ENVIRONMENT = "production"
-# Neon PostgreSQL Database Connection
-VITE_NEON_DATABASE_URL = "postgresql://neondb_owner:npg_LFxB7ZPqhoi6@ep-silent-paper-am8ltwpf-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 # Static Assets (Your Vite Frontend)
 [assets]

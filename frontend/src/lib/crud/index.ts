@@ -43,3 +43,6 @@ export type { Conversation, ConversationInsert, ConversationUpdate, Message, Mes
 export type { Payment, PaymentInsert, PaymentUpdate } from './payments';
 export type { Lead, LeadInsert, LeadUpdate, Booking, BookingInsert, BookingUpdate } from './leads';
 export type { QueryOptions, PaginatedResult } from './query-builder';
+
+// Explicitly re-export lead functions (for direct imports)
+export { fetchLeads, fetchLeadsByChatbot, updateLead, updateLeadStatus, deleteLead } from './leads';

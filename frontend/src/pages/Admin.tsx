@@ -102,20 +102,24 @@ export default function Admin() {
     }
     return {
       adminId: 'FV_ADMIN_001',
-      email: 'devappkavita@gmail.com',
-      password: 'kavitabisht2598@sbi',
-      apiKey: 'fv_live_sk_1234567890abcdefghijklmnopqrstuvwxyz',
-      dashboardUrl: 'https://flowvibe.ai/admin'
+      email: import.meta.env.VITE_ADMIN_EMAIL || 'admin@flowvibe.ai',
+      password: import.meta.env.VITE_ADMIN_PASSWORD || '',
+      apiKey: import.meta.env.VITE_ADMIN_API_KEY || '',
+      dashboardUrl: import.meta.env.VITE_DASHBOARD_URL || ''
     };
   });
 
   // Editable copy of credentials
   const [editableCredentials, setEditableCredentials] = useState(adminCredentials);
 
-  const handleCopyCredentials = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyCredentials = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const handleEdit = () => {

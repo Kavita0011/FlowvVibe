@@ -23,23 +23,12 @@ export default function Login() {
       return;
     }
 
-    // Check for saved admin credentials
-    const savedCreds = localStorage.getItem('adminCredentials');
-    let adminEmail = 'devappkavita@gmail.com';
-    let adminPass = 'kavitabisht2598@sbi';
+    // Check for admin credentials in env (security - don't hardcode)
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@flowvibe.ai';
+    const adminPass = import.meta.env.VITE_ADMIN_PASSWORD || '';
     
-    if (savedCreds) {
-      try {
-        const parsed = JSON.parse(savedCreds);
-        adminEmail = parsed.email || adminEmail;
-        adminPass = parsed.password || adminPass;
-      } catch {
-        // Use defaults if parse fails
-      }
-    }
-    
-    // Demo mode - admin login
-    if (email === adminEmail && password === adminPass) {
+    // Admin login (only if env vars are set)
+    if (adminEmail && adminPass && email === adminEmail && password === adminPass) {
       const adminUser: User = { 
         id: 'admin_001', 
         email: adminEmail, 
@@ -79,6 +68,13 @@ export default function Login() {
     setLoading(true);
     
     try {
+      // Check if Supabase is configured
+      if (!supabase) {
+        setLoginError('Database not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+        setLoading(false);
+        return;
+      }
+      
       // Try Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
