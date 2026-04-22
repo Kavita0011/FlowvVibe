@@ -23,29 +23,32 @@ export default function Login() {
       return;
     }
 
-    // Admin login - credentials from Cloudflare env vars
+    // Admin login - credentials from env vars (set in Cloudflare)
     const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-    const adminPass = import.meta.env.VITE_ADMIN_PASSWORD;
+    const adminPasswordHash = import.meta.env.VITE_ADMIN_PASSWORD_HASH;
     
-    if (adminEmail && adminPass && email === adminEmail && password === adminPass) {
-      const adminUser: User = { 
-        id: 'admin_001', 
-        email: adminEmail, 
-        displayName: 'Admin', 
-        role: 'admin', 
-        subscription: { tier: 'enterprise', status: 'active', startDate: new Date() }, 
-        createdAt: new Date(), 
-        isActive: true 
-      } as User;
-      localStorage.setItem('user', JSON.stringify(adminUser));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(adminUser);
-      setIsAuthenticated(true);
-      navigate('/admin');
-      return;
+    if (adminEmail && adminPasswordHash) {
+      const inputHash = btoa(password + 'flowvibe_salt_2024');
+      if (email === adminEmail && inputHash === adminPasswordHash) {
+        const adminUser: User = { 
+          id: 'admin_001', 
+          email: adminEmail, 
+          displayName: 'Admin', 
+          role: 'admin', 
+          subscription: { tier: 'enterprise', status: 'active', startDate: new Date() }, 
+          createdAt: new Date(), 
+          isActive: true 
+        } as User;
+        localStorage.setItem('user', JSON.stringify(adminUser));
+        localStorage.setItem('isAuthenticated', 'true');
+        setUser(adminUser);
+        setIsAuthenticated(true);
+        navigate('/admin');
+        return;
+      }
     }
 
-    // Demo user - works without any credentials
+    // Demo user
     if (email === 'demo@demo.com' && password === 'demo') {
       const testUser: User = { 
         id: 'demo_001', 
