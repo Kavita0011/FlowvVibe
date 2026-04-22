@@ -23,11 +23,10 @@ export default function Login() {
       return;
     }
 
-    // Check for admin credentials in env (security - don't hardcode)
-    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@flowvibe.ai';
-    const adminPass = import.meta.env.VITE_ADMIN_PASSWORD || '';
+    // Admin login - credentials from Cloudflare env vars
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+    const adminPass = import.meta.env.VITE_ADMIN_PASSWORD;
     
-    // Admin login (only if env vars are set)
     if (adminEmail && adminPass && email === adminEmail && password === adminPass) {
       const adminUser: User = { 
         id: 'admin_001', 
@@ -46,14 +45,12 @@ export default function Login() {
       return;
     }
 
-    // Test user login
-    const testEmail = import.meta.env.VITE_TEST_USER_EMAIL;
-    const testPass = import.meta.env.VITE_TEST_USER_PASSWORD;
-    if (testEmail && testPass && email === testEmail && password === testPass) {
+    // Demo user - works without any credentials
+    if (email === 'demo@demo.com' && password === 'demo') {
       const testUser: User = { 
-        id: 'test_001', 
-        email: testEmail, 
-        displayName: 'Test User', 
+        id: 'demo_001', 
+        email: 'demo@demo.com', 
+        displayName: 'Demo User', 
         role: 'user', 
         subscription: { tier: 'pro', status: 'active', startDate: new Date() }, 
         createdAt: new Date(), 
