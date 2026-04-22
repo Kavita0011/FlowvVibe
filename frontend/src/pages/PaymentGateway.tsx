@@ -88,16 +88,28 @@ export default function PaymentGateway() {
     if (utrNumber.length < 6) return;
     setProcessing(true);
     try {
-      // Save payment to database
-      if (user?.id) {
-        await supabase.from('payments').insert({
-          user_id: user.id,
-          amount: totalAmount,
-          status: 'pending',
-          plan: selectedPlan.id,
-          transaction_id: transactionId
-        });
-      }
+      // Save payment as PENDING - requires admin approval
+      const paymentData = {
+        id: transactionId,
+        userId: user?.id,
+        userEmail: user?.email,
+        amount: totalAmount,
+        status: 'pending',
+        plan: selectedPlan.id,
+        utrNumber: utrNumber,
+        addons: selectedAddons,
+        createdAt: new Date().toISOString(),
+        approved: false, // requires admin approval
+        activated: false // requires admin approval
+      };
+      
+      // Save to store
+      addPayment(paymentData as any);
+      
+      // Also save to localStorage for persistence
+      const existingPayments = JSON.parse(localStorage.getItem('pendingPayments') || '[]');
+      localStorage.setItem('pendingPayments', JSON.stringify([...existingPayments, paymentData]));
+      
       setPaymentStep('success');
     } catch (err) {
       console.error(err);

@@ -7,7 +7,7 @@ import {
   TrendingUp, Calendar, Clock, Plus, X, Edit, Trash2, Check, XCircle,
   Key, Shield, AlertTriangle, Sparkles, Tag, Percent, Star,
   Save, RefreshCw, Activity, UserCheck, UserX, Search,
-  MoreVertical, ChevronDown
+  MoreVertical, ChevronDown, CheckCircle, XCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -75,12 +75,52 @@ export default function AdminSettings() {
     catch { return ''; }
   });
   const [saveSettingsMsg, setSaveSettingsMsg] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState('');
 
   const savePaymentSettings = () => {
     const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode };
     localStorage.setItem('paymentSettings', JSON.stringify(settings));
     setSaveSettingsMsg('Saved!');
     setTimeout(() => setSaveSettingsMsg(''), 2000);
+  };
+
+  const changePassword = () => {
+    // Verify current password
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || '';
+    const adminPassHash = import.meta.env.VITE_ADMIN_PASSWORD_HASH || '';
+    const inputHash = btoa(currentPassword + 'flowvibe_salt_2024');
+    
+    if (!adminEmail || !adminPassHash) {
+      setPasswordMsg('Admin credentials not configured in Cloudflare');
+      return;
+    }
+    
+    if (inputHash !== adminPassHash) {
+      setPasswordMsg('Current password is incorrect');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg('New passwords do not match');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      setPasswordMsg('Password must be at least 6 characters');
+      return;
+    }
+    
+    // Save new password hash for next login
+    const newHash = btoa(newPassword + 'flowvibe_salt_2024');
+    localStorage.setItem('pendingPasswordHash', newHash);
+    setPasswordMsg('Password updated! It will work from next login.');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setTimeout(() => setPasswordMsg(''), 3000);
   };
 
   const fetchPricingFromBackend = async () => {
@@ -255,9 +295,33 @@ export default function AdminSettings() {
     }
   };
 
-  const handlePaymentAction = (paymentId: string, action: 'refund' | 'complete' | 'fail') => {
-    const status = action === 'complete' ? 'completed' : action === 'fail' ? 'failed' : 'refunded';
-    updatePayment(paymentId, { status });
+  const handlePaymentAction = (paymentId: string, action: 'approve' | 'reject' | 'refund') => {
+    const newStatus = action === 'approve' ? 'completed' : action === 'reject' ? 'rejected' : 'refunded';
+    const approved = action === 'approve';
+    const activated = action === 'approve';
+    
+    updatePayment(paymentId, { status: newStatus, approved, activated });
+    
+    // If approved, update user's subscription
+    if (action === 'approve') {
+      const payment = payments.find((p: any) => p.id === paymentId);
+      if (payment) {
+        const store = useChatbotStore?.getState();
+        if (store?.setUser) {
+          const currentUser = store.user;
+          if (currentUser) {
+            store.setUser({
+              ...currentUser,
+              subscription: {
+                tier: payment.plan,
+                status: 'active',
+                startDate: new Date()
+              }
+            });
+          }
+        }
+      }
+    }
   };
 
   return (
@@ -477,34 +541,36 @@ export default function AdminSettings() {
                           <td className="px-6 py-4 text-slate-400 text-sm">
                             {new Date(payment.createdAt).toLocaleDateString()}
                           </td>
-                          <td className="px-6 py-4">
+<td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               {payment.status === 'pending' && (
                                 <>
                                   <button 
-                                    onClick={() => handlePaymentAction(payment.id, 'complete')}
+                                    onClick={() => handlePaymentAction(payment.id, 'approve')}
                                     className="p-2 text-green-400 hover:bg-green-500/20 rounded-lg"
-                                    title="Mark Complete"
+                                    title="Approve & Activate"
                                   >
-                                    <Check className="w-4 h-4" />
+                                    <CheckCircle className="w-4 h-4" />
                                   </button>
                                   <button 
-                                    onClick={() => handlePaymentAction(payment.id, 'fail')}
+                                    onClick={() => handlePaymentAction(payment.id, 'reject')}
                                     className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg"
-                                    title="Mark Failed"
+                                    title="Reject"
                                   >
                                     <XCircle className="w-4 h-4" />
                                   </button>
                                 </>
                               )}
                               {payment.status === 'completed' && (
-                                <button 
-                                  onClick={() => handlePaymentAction(payment.id, 'refund')}
-                                  className="p-2 text-yellow-400 hover:bg-yellow-500/20 rounded-lg"
-                                  title="Refund"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                </button>
+                                <>
+                                  <button 
+                                    onClick={() => handlePaymentAction(payment.id, 'refund')}
+                                    className="p-2 text-purple-400 hover:bg-purple-500/20 rounded-lg"
+                                    title="Refund"
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -893,6 +959,56 @@ export default function AdminSettings() {
                     />
                   </div>
                 </div>
+                
+                {/* Admin Password Change */}
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <h4 className="text-white font-medium mb-4 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-yellow-400" />
+                    Change Admin Password
+                  </h4>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">Current Password</label>
+                      <input
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="Enter current"
+                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">New Password</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter new"
+                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-2 text-sm">Confirm Password</label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new"
+                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      />
+                    </div>
+                  </div>
+                  <button onClick={changePassword} className="mt-4 px-6 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-medium rounded-lg flex items-center gap-2">
+                    <Key className="w-4 h-4" />
+                    Update Password
+                  </button>
+                  {passwordMsg && (
+                    <span className={`ml-4 ${passwordMsg.includes('updated') ? 'text-green-400' : 'text-red-400'}`}>
+                      {passwordMsg}
+                    </span>
+                  )}
+                </div>
+                
                 <button className="mt-4 px-6 py-2 bg-cyan-500 text-white rounded-lg">
                   <Save className="w-4 h-4 inline mr-2" />
                   Save Settings
