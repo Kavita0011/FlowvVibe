@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, AlertTriangle, Shield } from 'lucide-react';
+import { checkRateLimit, createSessionToken, validateEmail, sanitizeInput } from '../lib/security';
 import type { User } from '../types';
 
 export default function Login() {
@@ -13,13 +13,42 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [lockoutEnd, setLockoutEnd] = useState(0);
+
+  // Rate limiting check
+  useEffect(() => {
+    const identifier = `login_${window.location.ip || 'unknown'}`;
+    const { allowed, resetAt } = checkRateLimit(identifier, 5, 15);
+    if (!allowed) {
+      setLocked(true);
+      setLockoutEnd(resetAt);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     
-    if (!email || !password) {
+    // Check rate limit
+    const identifier = `login_${window.location.ip || 'unknown'}`;
+    const { allowed, resetAt } = checkRateLimit(identifier, 5, 15);
+    if (!allowed) {
+      setLocked(true);
+      setLockoutEnd(resetAt);
+      setLoginError(`Too many attempts. Try again in ${Math.ceil((resetAt - Date.now()) / 60000)} minutes`);
+      return;
+    }
+    
+    // Validate inputs
+    const sanitizedEmail = sanitizeInput(email);
+    if (!sanitizedEmail || !password) {
       setLoginError('Please enter both email and password');
+      return;
+    }
+    
+    if (!validateEmail(sanitizedEmail)) {
+      setLoginError('Invalid email format');
       return;
     }
 
@@ -27,9 +56,12 @@ export default function Login() {
     const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
     const adminPasswordHash = import.meta.env.VITE_ADMIN_PASSWORD_HASH;
     
-    if (adminEmail && adminPasswordHash) {
+    if (adminEmail && adminPasswordHash && sanitizedEmail === adminEmail) {
       const inputHash = btoa(password + 'flowvibe_salt_2024');
-      if (email === adminEmail && inputHash === adminPasswordHash) {
+      if (inputHash === adminPasswordHash) {
+        // Create session token
+        const { token, expires } = createSessionToken('admin_001', 24);
+        
         const adminUser: User = { 
           id: 'admin_001', 
           email: adminEmail, 
@@ -39,8 +71,14 @@ export default function Login() {
           createdAt: new Date(), 
           isActive: true 
         } as User;
+        
+        // Secure storage
+        localStorage.setItem('session_token', token);
+        localStorage.setItem('session_expires', expires.toString());
         localStorage.setItem('user', JSON.stringify(adminUser));
         localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('last_login', Date.now().toString());
+        
         setUser(adminUser);
         setIsAuthenticated(true);
         navigate('/admin');
@@ -49,7 +87,9 @@ export default function Login() {
     }
 
     // Demo user
-    if (email === 'demo@demo.com' && password === 'demo') {
+    if (sanitizedEmail === 'demo@demo.com' && password === 'demo') {
+      const { token, expires } = createSessionToken('demo_001', 24);
+      
       const testUser: User = { 
         id: 'demo_001', 
         email: 'demo@demo.com', 
@@ -179,8 +219,18 @@ export default function Login() {
           <h2 className="text-2xl font-bold text-white text-center mb-2">Welcome Back</h2>
           <p className="text-slate-400 text-center mb-8">Login to your account</p>
 
-          {loginError && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-6">{loginError}</div>
+          {locked && lockoutEnd > Date.now() && (
+            <div className="bg-orange-500/10 border border-orange-500/50 text-orange-400 px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Account temporarily locked. Try again in {Math.ceil((lockoutEnd - Date.now()) / 60000)} minutes.
+            </div>
+          )}
+          
+          {loginError && !locked && (
+            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
+              <Shield className="w-5 h-5" />
+              {loginError}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">

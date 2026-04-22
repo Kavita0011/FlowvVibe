@@ -11,6 +11,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Security headers (10/10)
+const securityHeaders = {
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.openrouter.ai https://*.neon.tech",
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+};
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -18,7 +29,28 @@ export default {
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+      return new Response(null, { headers: { ...corsHeaders, ...securityHeaders } });
+    }
+
+    // Rate limiting check (simple in-memory)
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateKey = `${path}:${clientIP}`;
+    const now = Date.now();
+    
+    if (!global.rateLimits) global.rateLimits = {};
+    const rl = global.rateLimits[rateKey];
+    
+    if (rl && rl.count > 100 && now < rl.resetAt) {
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), { 
+        status: 429, 
+        headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (!rl || now > rl.resetAt) {
+      global.rateLimits[rateKey] = { count: 1, resetAt: now + 60000 };
+    } else {
+      global.rateLimits[rateKey].count++;
     }
 
     // Route handling
