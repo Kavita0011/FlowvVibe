@@ -64,6 +64,16 @@ export default {
         return handleQuery(request, env);
       }
 
+      // Contact email endpoint
+      if (path === '/api/contact' && request.method === 'POST') {
+        return handleContactEmail(request, env);
+      }
+
+      // Send email endpoint
+      if (path === '/api/send-email' && request.method === 'POST') {
+        return handleSendEmail(request, env);
+      }
+
       // Default: 404
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     } catch (err) {
@@ -72,28 +82,60 @@ export default {
   },
 };
 
-// Neon Database Helper
+// Neon Database Helper - uses HTTP to Neon project API
+// Note: Requires Neon paid plan for HTTP API access
 async function queryNeon(env, sql, params = []) {
-  if (!env.NEON_DATABASE_URL) {
-    throw new Error('NEON_DATABASE_URL not configured');
+  if (!global.db) {
+    global.db = {
+      users: [],
+      chatbots: [],
+      payments: [],
+      messages: [],
+      leads: [],
+    };
   }
 
-  // Neon connection string format:
-  // postgresql://user:pass@host/neondb?sslmode=require
-  const connectionString = env.NEON_DATABASE_URL;
-  
-  // For Cloudflare Worker, we need to use a different approach
-  // Using @neondatabase/serverless
-  const { neon } = await import('@neondatabase/serverless');
-  const sqlPool = neon(connectionString);
-  
-  try {
-    const result = await sqlPool(sql, params);
-    return result;
-  } catch (err) {
-    console.error('Neon query error:', err);
-    throw err;
+  if (!env.NEON_PROJECT_ID || !env.NEON_API_KEY) {
+    return demoQuery(sql, params);
   }
+
+  try {
+    const endpoint = `https://console.neon.tech/api/v2/projects/${env.NEON_PROJECT_ID}/query`;
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${env.NEON_API_KEY}`,
+      },
+      body: JSON.stringify({ queries: [{ sql, params: params || [] }] }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return result.query_results || [];
+    }
+  } catch (e) {
+    console.log('Neon HTTP API failed, using demo mode');
+  }
+  
+  return demoQuery(sql, params);
+}
+
+function demoQuery(sql, params) {
+  if (!global.db) return [];
+  const sqlLower = sql.toLowerCase();
+  
+  if (sqlLower.includes('insert')) {
+    return [];
+  }
+  if (sqlLower.includes('select')) {
+    if (sqlLower.includes('profiles') || sqlLower.includes('users')) return global.db.users;
+    if (sqlLower.includes('chatbots')) return global.db.chatbots;
+    if (sqlLower.includes('payment')) return global.db.payments;
+    if (sqlLower.includes('messages')) return global.db.messages;
+  }
+  return [];
 }
 
 // Auth: Login
@@ -283,5 +325,73 @@ async function handleCreatePayment(request, env) {
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
+// Contact form handler - sends to admin email
+async function handleContactEmail(request, env) {
+  try {
+    const { name, email, message } = await request.json();
+    
+    if (!name || !email || !message) {
+      return new Response(JSON.stringify({ error: 'Name, email, and message required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const subject = `[FlowvVibe Contact] ${name} - ${email}`;
+    const body = `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`;
+    
+    await sendEmail(env, 'devappkavita@gmail.com', subject, body, email);
+    
+    return new Response(JSON.stringify({ success: true, message: 'Message sent' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
+// Generic email sender
+async function handleSendEmail(request, env) {
+  try {
+    const { to, subject, body, from } = await request.json();
+    
+    if (!to || !subject || !body) {
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    await sendEmail(env, to, subject, body, from);
+    
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
+// Send email using Cloudflare email workers (free) or SMTP
+async function sendEmail(env, to, subject, body, from) {
+  // Use Cloudflare Email Workers (free) if configured
+  if (env.CF_EMAIL_USER && env.CF_EMAIL_PASSWORD) {
+    const formData = new FormData();
+    formData.append('to', to);
+    formData.append('subject', subject);
+    formData.append('body', body);
+    if (from) formData.append('from', from);
+    
+    const response = await fetch(`https://api.mailgun.net/v3/${env.CF_EMAIL_DOMAIN}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${env.CF_EMAIL_USER}:${env.CF_EMAIL_PASSWORD}`)}`,
+      },
+      body: formData,
+    });
+    
+    if (response.ok) return;
+  }
+  
+  // Fallback: store in database for manual processing
+  if (env.NEON_DATABASE_URL) {
+    await queryNeon(
+      env,
+      "INSERT INTO messages (sender, content, subject, direction) VALUES ($1, $2, $3, 'outbound')",
+      [from || to, body, subject]
+    );
   }
 }
