@@ -1,17 +1,16 @@
 name = "flowvibe-api"
 main = "worker.js"
 compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
 
-# Static Assets (Your Vite Frontend)
 [assets]
 directory = "../frontend/dist"
 not_found_handling = "single-page-application"
 
-# Development Override
-[env.dev]
-name = "flowvibe-api-dev"
-[env.dev.vars]
-ENVIRONMENT = "development"
+# Cloudflare Secrets (set via wrangler secret put)
+# Run: wrangler secret put NEON_DATABASE_URL
+# Run: wrangler secret put SMTP_USER
+# Run: wrangler secret put SMTP_PASS
