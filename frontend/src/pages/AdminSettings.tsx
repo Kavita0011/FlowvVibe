@@ -56,6 +56,32 @@ export default function AdminSettings() {
   const defaultPricing: typeof pricingPlans[number] = { id: '', name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false };
   const [customPrices, setCustomPrices] = useState<typeof pricingPlans>(pricingPlans);
   const [backendLoading, setBackendLoading] = useState(false);
+  
+  // Payment settings
+  const [upiId, setUpiId] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paymentSettings') || '{}').upi || ''; } 
+    catch { return ''; }
+  });
+  const [bankName, setBankName] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paymentSettings') || '{}').bankName || ''; } 
+    catch { return ''; }
+  });
+  const [accountNumber, setAccountNumber] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paymentSettings') || '{}').accountNumber || ''; } 
+    catch { return ''; }
+  });
+  const [ifscCode, setIfscCode] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paymentSettings') || '{}').ifsc || ''; } 
+    catch { return ''; }
+  });
+  const [saveSettingsMsg, setSaveSettingsMsg] = useState('');
+
+  const savePaymentSettings = () => {
+    const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode };
+    localStorage.setItem('paymentSettings', JSON.stringify(settings));
+    setSaveSettingsMsg('Saved!');
+    setTimeout(() => setSaveSettingsMsg(''), 2000);
+  };
 
   const fetchPricingFromBackend = async () => {
     try {
@@ -800,6 +826,8 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">UPI ID</label>
                     <input
                       type="text"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
                       placeholder="yourname@upi"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
@@ -808,6 +836,8 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">Bank Name</label>
                     <input
                       type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
                       placeholder="State Bank of India"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
@@ -816,6 +846,8 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">Account Number</label>
                     <input
                       type="text"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
                       placeholder="1234567890"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
@@ -824,14 +856,17 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">IFSC Code</label>
                     <input
                       type="text"
+                      value={ifscCode}
+                      onChange={(e) => setIfscCode(e.target.value)}
                       placeholder="SBIN0004633"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
                 </div>
-                <button className="mt-4 px-6 py-2 bg-purple-500 text-white rounded-lg">
-                  <Save className="w-4 h-4 inline mr-2" />
+                <button onClick={savePaymentSettings} className="mt-4 px-6 py-2 bg-purple-500 text-white rounded-lg flex items-center gap-2">
+                  <Save className="w-4 h-4" />
                   Save Payment Details
+                  {saveSettingsMsg && <span className="text-green-400 ml-2">{saveSettingsMsg}</span>}
                 </button>
               </div>
 

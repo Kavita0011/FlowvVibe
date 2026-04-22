@@ -16,11 +16,21 @@ const ADDONS_DATA = [
   { id: 'crm', name: 'CRM Integration', price: 799 }
 ];
 
-// Admin receives payment via UPI
-const ADMIN_UPI = import.meta.env.VITE_ADMIN_UPI || 'flowvibe@yesbank';
-const ADMIN_BANK = 'FlowVibe Technologies Pvt Ltd';
-const ADMIN_ACCOUNT = import.meta.env.VITE_ADMIN_ACCOUNT_NUMBER || 'XXXXXXXXXXXX';
-const ADMIN_IFSC = import.meta.env.VITE_ADMIN_IFSC || 'SBIN0000000';
+// Admin payment settings - load from localStorage (set in admin panel)
+const getPaymentSettings = () => {
+  try {
+    return JSON.parse(localStorage.getItem('paymentSettings') || 'null');
+  } catch { return null; }
+};
+
+const defaultSettings = {
+  upi: 'devappkavita@oksbi',
+  bankName: 'FlowvVibe',
+  accountNumber: '',
+  ifsc: ''
+};
+
+const paymentSettings = getPaymentSettings() || defaultSettings;
 
 export default function PaymentGateway() {
   const navigate = useNavigate();
@@ -168,7 +178,7 @@ export default function PaymentGateway() {
             <Smartphone className="w-12 h-12 text-purple-400 mx-auto mb-3" />
             <p className="text-slate-400 text-sm mb-2">Scan QR or copy UPI ID</p>
             <div className="flex items-center justify-center gap-2 bg-slate-800 rounded-lg p-3">
-              <span className="text-white font-mono text-lg">{ADMIN_UPI}</span>
+              <span className="text-white font-mono text-lg">{paymentSettings.upi}</span>
               <button onClick={() => copyToClipboard(ADMIN_UPI, 'upi')} className="text-cyan-400">
                 {copiedField === 'upi' ? <CopyCheck className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
               </button>
@@ -182,7 +192,7 @@ export default function PaymentGateway() {
             <div className="flex justify-between items-center py-2 border-b border-slate-700">
               <span className="text-slate-400">Bank</span>
               <div className="flex items-center gap-2">
-                <span className="text-white">{ADMIN_BANK}</span>
+                <span className="text-white">{paymentSettings.bankName}</span>
               </div>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-slate-700">
