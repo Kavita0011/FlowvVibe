@@ -20,6 +20,13 @@ const securityHeaders = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'Cache-Control': 'public, max-age=0, s-maxage=3600',
+  'X-Powered-By': 'Cloudflare Workers',
+};
+
+// Cache headers for static assets
+const staticAssetHeaders = {
+  'Cache-Control': 'public, max-age=31536000, immutable',
 };
 
 export default {

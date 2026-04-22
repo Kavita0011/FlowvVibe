@@ -9,8 +9,15 @@ ENVIRONMENT = "production"
 [assets]
 directory = "../frontend/dist"
 not_found_handling = "single-page-application"
+cache_control = { bypass = false, edge_ttl = 3600, browser_ttl = 86400 }
+
+# Performance: Limit worker size
+# Usage model = bundled is default but we can specify
+# [usage_model] = paid  # Uncomment for higher limits
 
 # Cloudflare Secrets (set via wrangler secret put)
 # Run: wrangler secret put NEON_DATABASE_URL
 # Run: wrangler secret put SMTP_USER
 # Run: wrangler secret put SMTP_PASS
+# Run: wrangler secret put VITE_ADMIN_EMAIL
+# Run: wrangler secret put VITE_ADMIN_PASSWORD_HASH

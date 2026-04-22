@@ -9,16 +9,31 @@
     <meta name="author" content="FlowvVibe" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://flowvibe.com" />
+    
+    <!-- Performance: Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Open Graph -->
     <meta property="og:title" content="FlowvVibe - No-Code AI Chatbot Builder" />
     <meta property="og:description" content="Create AI chatbots with drag & drop. No coding required. Perfect for customer support and lead generation." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://flowvibe.com" />
     <meta property="og:image" content="https://flowvibe.com/og-image.png" />
+    
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="FlowvVibe - No-Code AI Chatbot Builder" />
     <meta name="twitter:description" content="Build AI chatbots with drag & drop. No coding required." />
+    
+    <!-- Theme -->
     <meta name="theme-color" content="#06b6d4" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
     <title>FlowvVibe - No-Code AI Chatbot Builder | Create Chatbots Free</title>
+    
+    <!-- SEO Schema -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -36,9 +51,21 @@
       "featureList": ["Drag drop builder", "No coding required", "Lead capture", "Booking integration", "Multi-channel support"]
     }
     </script>
+    
+    <!-- Critical CSS for faster initial paint -->
+    <style>
+      body { background-color: #0f172a; margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+      .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+      .loading-spinner { width: 40px; height: 40px; border: 3px solid #06b6d4; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

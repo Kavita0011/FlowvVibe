@@ -17,10 +17,26 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     sourcemap: false,
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 400,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-xyflow': ['@xyflow/react'],
+          'vendor-ui': ['lucide-react'],
+          'vendor-store': ['zustand'],
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    cssCodeSplit: true,
+    treeShaking: true,
   },
   esbuild: {
     platform: 'browser',
+    treeShaking: true,
   },
   server: {
     port: 5173,
@@ -30,5 +46,8 @@ export default defineConfig({
   preview: {
     port: 4173,
     host: '0.0.0.0',
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'zustand'],
   },
 })
