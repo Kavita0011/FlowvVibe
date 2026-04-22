@@ -59,6 +59,11 @@ export default {
         return handleCreatePayment(request, env);
       }
 
+      // Query endpoint
+      if (path === '/query' && request.method === 'POST') {
+        return handleQuery(request, env);
+      }
+
       // Default: 404
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     } catch (err) {
@@ -231,6 +236,22 @@ async function handleGetChatbots(request, env) {
     }
 
     return new Response(JSON.stringify([]), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
+// Query endpoint
+async function handleQuery(request, env) {
+  try {
+    const { sql, params } = await request.json();
+    
+    if (!sql) {
+      return new Response(JSON.stringify({ error: 'SQL required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const rows = await queryNeon(env, sql, params);
+    return new Response(JSON.stringify({ rows }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
