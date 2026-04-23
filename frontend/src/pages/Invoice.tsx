@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useChatbotStore } from '../stores/chatbotStore';
+import { supabase } from '../lib/supabase';
 import { 
   FileText, Download, CheckCircle, XCircle, Clock, Loader2,
   Building, CreditCard, Calendar, User, Mail, Phone, MapPin, Receipt,
@@ -68,23 +70,51 @@ export default function Invoice() {
   const loadPaymentAsInvoice = async (pid: string) => {
     try {
       setLoading(true);
-      // Load from localStorage store
+      
+      // Try fetching from database via API
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      // First try local store
       const store = useChatbotStore?.getState();
-      const payments = store?.payments || [];
-      const payment = payments.find((p: any) => p.id === pid);
+      const localPayments = store?.payments || [];
+      const localPayment = localPayments.find((p: any) => p.id === pid);
+      
+      let payment = localPayment;
+      
+      // If not found locally, try API
+      if (!payment && API_URL) {
+        try {
+          const response = await fetch(`${API_URL}/api/admin/payments`);
+          if (response.ok) {
+            const dbPayments = await response.json();
+            payment = dbPayments.find((p: any) => p.id === pid);
+          }
+        } catch (e) {
+          console.log('Could not fetch from API, using local data');
+        }
+      }
+      
+      // Try Supabase as fallback
+      if (!payment && supabase) {
+        const { data } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('id', pid)
+          .single();
+        if (data) payment = data;
+      }
       
       if (payment) {
         const invoiceData: InvoiceData = {
           invoiceNumber: `FV-INV-${payment.id?.slice(0, 8).toUpperCase() || Date.now()}`,
-          date: payment.createdAt ? new Date(payment.createdAt).toISOString() : new Date().toISOString(),
+          date: payment.created_at || payment.createdAt || new Date().toISOString(),
           dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           customer: {
-            name: payment.userName || 'Customer',
-            email: payment.userEmail || '',
-            phone: payment.userPhone,
+            name: payment.user_name || payment.userName || 'Customer',
+            email: payment.user_email || payment.userEmail || '',
           },
           items: [{
-            description: `${payment.plan?.toUpperCase()} Plan - FlowvVibe`,
+            description: `${payment.plan?.toUpperCase() || 'PRO'} Plan - FlowvVibe`,
             quantity: 1,
             price: payment.amount,
             total: payment.amount,
@@ -93,9 +123,9 @@ export default function Invoice() {
           tax: 0,
           total: payment.amount,
           status: payment.status === 'completed' ? 'paid' : payment.status === 'failed' ? 'cancelled' : 'pending',
-          paymentMethod: payment.method || 'UPI',
-          transactionId: payment.transactionId,
-          utrNumber: payment.utrNumber,
+          paymentMethod: payment.payment_method || payment.method || 'UPI',
+          transactionId: payment.transaction_id || payment.transactionId,
+          utrNumber: payment.utr_number || payment.utrNumber,
         };
         setInvoice(invoiceData);
       }

@@ -105,7 +105,7 @@ const nodeColors: Record<string, string> = {
 
 export default function FlowBuilder() {
   const navigate = useNavigate();
-  const { currentChatbot, user, setFlowData, saveDraft, publishBot } = useChatbotStore();
+  const { currentChatbot, user, setFlowData, saveDraft, publishBot: publishToStore } = useChatbotStore();
   const isPro = user?.subscription?.tier === 'pro' || user?.subscription?.tier === 'enterprise';
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -358,10 +358,65 @@ export default function FlowBuilder() {
     ]);
   };
 
-  const saveFlow = () => {
+  const saveFlow = async () => {
     const flow = { nodes: nodes as Node[], edges: edges as Edge[] };
     setFlowData(flow as any);
+    
+    // Save to database
+    if (currentChatbot?.id) {
+      const API_URL = import.meta.env.VITE_API_URL;
+      try {
+        await fetch(`${API_URL}/api/chatbots`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentChatbot.id,
+            name: currentChatbot.name,
+            industry: currentChatbot.industry,
+            description: currentChatbot.description,
+            flow: flow,
+            isPublished: false
+          })
+        });
+      } catch (e) {
+        console.log('Save to DB failed, using local only');
+      }
+    }
+    
     navigate('/preview');
+  };
+
+  const publishBot = async () => {
+    const flow = { nodes: nodes as Node[], edges: edges as Edge[] };
+    setFlowData(flow as any);
+    
+    // Save and publish to database
+    if (currentChatbot?.id) {
+      const API_URL = import.meta.env.VITE_API_URL;
+      try {
+        await fetch(`${API_URL}/api/chatbots`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentChatbot.id,
+            name: currentChatbot.name,
+            industry: currentChatbot.industry,
+            description: currentChatbot.description,
+            flow: flow,
+            isPublished: true
+          })
+        });
+        
+        publishToStore(currentChatbot.id);
+        alert('Bot published successfully!');
+      } catch (e) {
+        console.log('Publish to DB failed, using local only');
+        publishToStore(currentChatbot.id);
+        alert('Bot published (local)!');
+      }
+    } else {
+      alert('No chatbot selected');
+    }
   };
 
   return (
@@ -525,12 +580,7 @@ export default function FlowBuilder() {
             
             <button 
               onClick={() => {
-                saveFlow();
-                // Publish the bot
-                if (currentChatbot?.id) {
-                  publishBot(currentChatbot.id);
-                  alert('Bot published successfully!');
-                }
+                publishBot();
               }}
               className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg font-medium transition-colors"
             >

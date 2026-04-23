@@ -41,12 +41,32 @@ export default function Settings() {
     navigate('/');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      // Save profile to database
+      if (API_URL && user?.id) {
+        await fetch(`${API_URL}/api/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            displayName: profile.displayName,
+            email: profile.email
+          })
+        });
+      }
+      
+      // Also update in store
+      setUser({ ...user!, displayName: profile.displayName, email: profile.email });
+      localStorage.setItem('user', JSON.stringify({ ...user, ...profile }));
+    } catch (e) {
+      console.log('Save failed, using localStorage only');
       setUser({ ...user!, ...profile });
-      setLoading(false);
-    }, 1000);
+    }
+    setLoading(false);
   };
 
   const tabs = [

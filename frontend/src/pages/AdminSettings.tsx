@@ -80,8 +80,24 @@ export default function AdminSettings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState('');
 
-  const savePaymentSettings = () => {
-    const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode };
+  const savePaymentSettings = async () => {
+    const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode, supportEmail: 'devappkavita@gmail.com' };
+    
+    // Try to save to database
+    const API_URL = import.meta.env.VITE_API_URL;
+    try {
+      if (API_URL) {
+        await fetch(`${API_URL}/api/admin/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+      }
+    } catch (e) {
+      console.log('Could not save to database, using localStorage');
+    }
+    
+    // Also save locally for offline access
     localStorage.setItem('paymentSettings', JSON.stringify(settings));
     setSaveSettingsMsg('Saved!');
     setTimeout(() => setSaveSettingsMsg(''), 2000);
@@ -179,6 +195,28 @@ export default function AdminSettings() {
 
   const savePricingToBackend = async () => {
     try {
+      // Try API first
+      const API_URL = import.meta.env.VITE_API_URL;
+      for (const plan of customPrices) {
+        if (API_URL) {
+          await fetch(`${API_URL}/api/admin/pricing`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: plan.id,
+              name: plan.name,
+              price: plan.price,
+              originalPrice: plan.originalPrice,
+              period: plan.period,
+              description: plan.description,
+              isOnSale: plan.isOnSale,
+              saleReason: plan.saleReason
+            })
+          });
+        }
+      }
+      
+      // Also save to Supabase
       for (const plan of customPrices) {
         const { error } = await supabase.from('pricing_plans').upsert({
           id: plan.id,

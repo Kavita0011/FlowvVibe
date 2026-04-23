@@ -113,6 +113,74 @@ export default {
         return handleSendEmail(request, env);
       }
 
+      // Admin Settings API
+      if (path === '/api/admin/settings' && request.method === 'GET') {
+        return handleGetAdminSettings(request, env);
+      }
+      if (path === '/api/admin/settings' && request.method === 'POST') {
+        return handleSaveAdminSettings(request, env);
+      }
+      if (path === '/api/admin/settings' && request.method === 'PUT') {
+        return handleSaveAdminSettings(request, env);
+      }
+
+      // Pricing Plans CRUD
+      if (path === '/api/admin/pricing' && request.method === 'GET') {
+        return handleGetPricing(env);
+      }
+      if (path === '/api/admin/pricing' && request.method === 'POST') {
+        return handleSavePricingPlan(request, env);
+      }
+      if (path === '/api/admin/pricing' && request.method === 'PUT') {
+        return handleSavePricingPlan(request, env);
+      }
+      if (path === '/api/admin/pricing' && request.method === 'DELETE') {
+        return handleDeletePricingPlan(request, env);
+      }
+
+      // Payments CRUD
+      if (path === '/api/admin/payments' && request.method === 'GET') {
+        return handleGetAllPayments(request, env);
+      }
+      if (path === '/api/admin/payments/approve' && request.method === 'POST') {
+        return handleApprovePayment(request, env);
+      }
+      if (path === '/api/admin/payments/reject' && request.method === 'POST') {
+        return handleRejectPayment(request, env);
+      }
+
+      // User management
+      if (path === '/api/admin/users' && request.method === 'GET') {
+        return handleGetAllUsers(request, env);
+      }
+      if (path === '/api/admin/users/update' && request.method === 'POST') {
+        return handleUpdateUser(request, env);
+      }
+
+      // Subscription management
+      if (path === '/api/subscription' && request.method === 'GET') {
+        return handleGetSubscription(request, env);
+      }
+      if (path === '/api/subscription' && request.method === 'POST') {
+        return handleCreateSubscription(request, env);
+      }
+
+      // Chatbot CRUD
+      if (path === '/api/chatbots' && request.method === 'POST') {
+        return handleCreateChatbot(request, env);
+      }
+      if (path === '/api/chatbots' && request.method === 'PUT') {
+        return handleUpdateChatbot(request, env);
+      }
+      if (path === '/api/chatbots' && request.method === 'DELETE') {
+        return handleDeleteChatbot(request, env);
+      }
+
+      // Profile API
+      if (path === '/api/profile' && request.method === 'POST') {
+        return handleUpdateProfile(request, env);
+      }
+
       // Default: 404
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     } catch (err) {
@@ -432,5 +500,397 @@ async function sendEmail(env, to, subject, body, from) {
       "INSERT INTO messages (sender, content, subject, direction) VALUES ($1, $2, $3, 'outbound')",
       [from || to, body, subject]
     );
+  }
+}
+
+// ============================================
+// Admin Settings API
+// ============================================
+
+async function handleGetAdminSettings(request, env) {
+  try {
+    const adminSettings = {
+      upi: env.ADMIN_UPI || 'devappkavita@oksbi',
+      bankName: env.ADMIN_BANK_NAME || 'State Bank of India',
+      accountNumber: env.ADMIN_ACCOUNT_NUMBER || '',
+      ifsc: env.ADMIN_IFSC || '',
+      supportEmail: env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com'
+    };
+    
+    return new Response(JSON.stringify(adminSettings), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleSaveAdminSettings(request, env) {
+  try {
+    const { upi, bankName, accountNumber, ifsc, supportEmail } = await request.json();
+    
+    // Save to Neon database if available
+    if (env.NEON_DATABASE_URL) {
+      const existing = await queryNeon(env, "SELECT id FROM admin_settings LIMIT 1");
+      
+      if (existing && existing.length > 0) {
+        await queryNeon(env, 
+          "UPDATE admin_settings SET upi = $1, bank_name = $2, account_number = $3, ifsc = $4, support_email = $5, updated_at = NOW()",
+          [upi, bankName, accountNumber, ifsc, supportEmail]
+        );
+      } else {
+        await queryNeon(env,
+          "INSERT INTO admin_settings (upi, bank_name, account_number, ifsc, support_email) VALUES ($1, $2, $3, $4, $5)",
+          [upi, bankName, accountNumber, ifsc, supportEmail]
+        );
+      }
+    }
+    
+    return new Response(JSON.stringify({ success: true, message: 'Settings saved' }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+// ============================================
+// Pricing Plans CRUD
+// ============================================
+
+async function handleSavePricingPlan(request, env) {
+  try {
+    const { id, name, price, originalPrice, period, description, isOnSale, saleReason } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env, 
+        `INSERT INTO subscription_tiers (tier_key, name, price, original_price, period, description, is_on_sale, sale_reason, is_active, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 10)
+         ON CONFLICT (tier_key) DO UPDATE SET name = $2, price = $3, original_price = $4, description = $5, is_on_sale = $7, sale_reason = $8`,
+        [id, name, price, originalPrice || price, period, description, isOnSale || false, saleReason || '']
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleDeletePricingPlan(request, env) {
+  try {
+    const { id } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env, "UPDATE subscription_tiers SET is_active = false WHERE tier_key = $1", [id]);
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+// ============================================
+// Payments CRUD
+// ============================================
+
+async function handleGetAllPayments(request, env) {
+  try {
+    let payments = [];
+    
+    if (env.NEON_DATABASE_URL) {
+      payments = await queryNeon(env, 
+        `SELECT p.*, u.email as user_email, u.display_name as user_name 
+         FROM payments p 
+         LEFT JOIN profiles u ON p.user_id = u.id 
+         ORDER BY p.created_at DESC LIMIT 100`
+      );
+    } else {
+      payments = global.db?.payments || [];
+    }
+    
+    return new Response(JSON.stringify(payments || []), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleApprovePayment(request, env) {
+  try {
+    const { paymentId, userId, plan, amount } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      // Update payment status
+      await queryNeon(env, 
+        "UPDATE payments SET status = 'completed', approved = true, activated = true, updated_at = NOW() WHERE id = $1",
+        [paymentId]
+      );
+      
+      // Create or update user subscription
+      const existingSub = await queryNeon(env, 
+        "SELECT id FROM user_subscriptions WHERE user_id = $1 AND status = 'active'",
+        [userId]
+      );
+      
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 10); // Lifetime
+      
+      if (existingSub && existingSub.length > 0) {
+        await queryNeon(env,
+          "UPDATE user_subscriptions SET tier_id = $1, status = 'active', start_date = NOW(), expires_at = $2 WHERE user_id = $3",
+          [plan, expiresAt.toISOString(), userId]
+        );
+      } else {
+        await queryNeon(env,
+          "INSERT INTO user_subscriptions (id, user_id, tier_id, status, start_date, expires_at) VALUES ($1, $2, $3, 'active', NOW(), $4)",
+          [crypto.randomUUID(), userId, plan, expiresAt.toISOString()]
+        );
+      }
+    }
+    
+    return new Response(JSON.stringify({ success: true, message: 'Payment approved, subscription activated' }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleRejectPayment(request, env) {
+  try {
+    const { paymentId } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env, 
+        "UPDATE payments SET status = 'rejected', updated_at = NOW() WHERE id = $1",
+        [paymentId]
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true, message: 'Payment rejected' }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+// ============================================
+// User Management
+// ============================================
+
+async function handleGetAllUsers(request, env) {
+  try {
+    let users = [];
+    
+    if (env.NEON_DATABASE_URL) {
+      users = await queryNeon(env, 
+        `SELECT id, email, display_name, role, is_active, created_at FROM profiles ORDER BY created_at DESC LIMIT 100`
+      );
+    } else {
+      users = global.db?.users || [];
+    }
+    
+    return new Response(JSON.stringify(users || []), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleUpdateUser(request, env) {
+  try {
+    const { userId, isActive, role } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env,
+        "UPDATE profiles SET is_active = $1, role = $2 WHERE id = $3",
+        [isActive, role, userId]
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+// ============================================
+// Subscription Management
+// ============================================
+
+async function handleGetSubscription(request, env) {
+  const url = new URL(request.url);
+  const userId = url.searchParams.get('user_id');
+  
+  try {
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'user_id required' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    let subscription = null;
+    
+    if (env.NEON_DATABASE_URL) {
+      subscription = await queryNeon(env,
+        `SELECT us.*, st.name as tier_name, st.price as tier_price 
+         FROM user_subscriptions us 
+         LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key 
+         WHERE us.user_id = $1 AND us.status = 'active'`,
+        [userId]
+      );
+    }
+    
+    return new Response(JSON.stringify(subscription || null), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleCreateSubscription(request, env) {
+  try {
+    const { userId, tierId, paymentId, amount } = await request.json();
+    
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 10);
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env,
+        "INSERT INTO user_subscriptions (id, user_id, tier_id, status, start_date, expires_at) VALUES ($1, $2, $3, 'active', NOW(), $4)",
+        [crypto.randomUUID(), userId, tierId, expiresAt.toISOString()]
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true, expiresAt: expiresAt.toISOString() }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+// ============================================
+// Chatbot CRUD
+// ============================================
+
+async function handleCreateChatbot(request, env) {
+  try {
+    const { userId, name, industry, description } = await request.json();
+    
+    const botId = crypto.randomUUID();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env,
+        "INSERT INTO chatbots (id, user_id, name, industry, description, is_published, created_at) VALUES ($1, $2, $3, $4, $5, false, NOW())",
+        [botId, userId, name, industry, description]
+      );
+    }
+    
+    return new Response(JSON.stringify({ id: botId, name, industry }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleUpdateChatbot(request, env) {
+  try {
+    const { id, name, industry, description, flow, isPublished } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env,
+        "UPDATE chatbots SET name = $1, industry = $2, description = $3, flow = $4, is_published = $5, updated_at = NOW() WHERE id = $6",
+        [name, industry, description, JSON.stringify(flow), isPublished, id]
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleDeleteChatbot(request, env) {
+  try {
+    const { id } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env, "DELETE FROM chatbots WHERE id = $1", [id]);
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+// ============================================
+// Profile Management
+// ============================================
+
+async function handleUpdateProfile(request, env) {
+  try {
+    const { userId, displayName, email } = await request.json();
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env,
+        "UPDATE profiles SET display_name = $1, email = $2, updated_at = NOW() WHERE id = $3",
+        [displayName, email, userId]
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
   }
 }
