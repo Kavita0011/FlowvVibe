@@ -165,10 +165,10 @@ export default function Settings() {
                 <h2 className="text-xl font-semibold text-white mb-6">Channel Integrations</h2>
                 <div className="space-y-4">
                   {[
-                    { icon: Globe, name: 'Website', desc: 'Add chat widget to your website' },
-                    { icon: MessageSquare, name: 'WhatsApp', desc: 'Connect WhatsApp Business' },
-                    { icon: Smartphone, name: 'Telegram', desc: 'Connect Telegram bot' },
-                    { icon: Code, name: 'Slack', desc: 'Add to Slack workspace' },
+                    { icon: Globe, name: 'Website', desc: 'Add chat widget to your website', route: '/embed' },
+                    { icon: MessageSquare, name: 'WhatsApp', desc: 'Connect WhatsApp Business', route: '/integrations' },
+                    { icon: Smartphone, name: 'Telegram', desc: 'Connect Telegram bot', route: '/integrations' },
+                    { icon: Code, name: 'Slack', desc: 'Add to Slack workspace', route: '/integrations' },
                   ].map((channel, i) => (
                     <div key={i} className="flex items-center justify-between p-4 bg-slate-700/50 rounded-xl border border-slate-600">
                       <div className="flex items-center gap-4">
@@ -180,8 +180,11 @@ export default function Settings() {
                           <p className="text-slate-400 text-sm">{channel.desc}</p>
                         </div>
                       </div>
-                      <button className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg text-sm transition-colors">
-                        Connect
+                      <button
+                        onClick={() => navigate(channel.route)}
+                        className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm transition-colors"
+                      >
+                        Configure
                       </button>
                     </div>
                   ))}
@@ -198,11 +201,11 @@ export default function Settings() {
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        value="demo-api-key-12345"
+                        value={user?.id ? `fv_${user.id.slice(0, 8)}_api` : 'Generate your API key'}
                         readOnly
                         className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                       />
-                      <button 
+                      <button
                         onClick={handleCopyApiKey}
                         className="px-4 py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
                       >
@@ -290,8 +293,11 @@ export default function Settings() {
                     Basic features
                   </div>
                 </div>
-                <button className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg font-medium transition-colors">
-                  Upgrade to Pro - ₹499/month
+                <button
+                  onClick={() => navigate('/pricing')}
+                  className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-white rounded-lg font-medium transition-colors"
+                >
+                  Upgrade to Pro
                 </button>
               </div>
             )}

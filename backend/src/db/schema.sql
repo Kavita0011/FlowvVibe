@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     password_hash VARCHAR(255),
     display_name VARCHAR(255),
     role VARCHAR(50) DEFAULT 'user',
+    subscription_tier VARCHAR(50) DEFAULT 'free',
     is_active BOOLEAN DEFAULT false,
     email_verified BOOLEAN DEFAULT false,
     verification_token VARCHAR(255),
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+CREATE INDEX IF NOT EXISTS idx_profiles_tier ON profiles(subscription_tier);
 
 -- ============================================
 -- Subscription tiers (pricing plans)
@@ -129,6 +131,10 @@ CREATE TABLE IF NOT EXISTS chatbots (
     prd JSONB,
     channel_configs JSONB DEFAULT '[]',
     is_published BOOLEAN DEFAULT false,
+    is_approved BOOLEAN DEFAULT false,
+    approval_notes TEXT,
+    approved_by UUID REFERENCES profiles(id),
+    approved_at TIMESTAMP,
     published_at TIMESTAMP,
     view_count INTEGER DEFAULT 0,
     conversation_count INTEGER DEFAULT 0,
@@ -138,6 +144,7 @@ CREATE TABLE IF NOT EXISTS chatbots (
 
 CREATE INDEX IF NOT EXISTS idx_chatbots_user ON chatbots(user_id);
 CREATE INDEX IF NOT EXISTS idx_chatbots_published ON chatbots(is_published);
+CREATE INDEX IF NOT EXISTS idx_chatbots_approved ON chatbots(is_approved);
 
 -- ============================================
 -- Conversations
@@ -329,6 +336,26 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rate_limits_identifier ON rate_limits(identifier);
+
+-- ============================================
+-- Analytics Events
+-- ============================================
+CREATE TABLE IF NOT EXISTS analytics_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type VARCHAR(50) NOT NULL,
+    event_name VARCHAR(100),
+    session_id VARCHAR(255),
+    user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    url TEXT,
+    referrer TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_session ON analytics_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_user ON analytics_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_created ON analytics_events(created_at);
 
 -- ============================================
 -- Functions and Triggers

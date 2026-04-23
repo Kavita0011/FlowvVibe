@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import type { PRD } from '../types';
 import { cn } from '../utils/cn';
-import { 
+import {
   Bot, ArrowLeft, Plus, Settings, CreditCard, Users, MessageSquare,
   TrendingUp, Calendar, Clock, LogOut, Copy, ExternalLink, MoreVertical,
   ChevronRight, Zap, Star, Check, AlertCircle, Play, Pause, Trash2,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchLeadsByChatbot, updateLeadStatus, deleteLead } from '../lib/crud';
+import toast from 'react-hot-toast';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
@@ -40,13 +41,84 @@ export default function UserDashboard() {
   const [leadFilter, setLeadFilter] = useState('all');
   const [dbBookings, setDbBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [profile, setProfile] = useState({ companyName: '', location: '' });
+  const [passwords, setPasswords] = useState({ current: '', newPass: '' });
   const [stats, setStats] = useState({
     totalBots: 0,
     conversations: 0,
     leads: 0,
     avgRating: 0
   });
+  const [subscription, setSubscription] = useState<{
+    tier_name: string;
+    tier_id: string;
+    status: string;
+    expires_at: string;
+  } | null>(null);
   const upgradeClicked = () => navigate('/pricing');
+
+  const handleSaveProfile = async () => {
+    setProfileLoading(true);
+    try {
+      if (supabase) {
+        await supabase.from('profiles').update({
+          display_name: user.displayName,
+          company_name: profile.companyName,
+          location: profile.location,
+        }).eq('id', user.id);
+      }
+      toast.success('Profile updated successfully!');
+    } catch {
+      toast.error('Failed to update profile');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!passwords.current || !passwords.newPass) {
+      toast.error('Please fill all password fields');
+      return;
+    }
+    if (passwords.newPass.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      if (supabase) {
+        const { error } = await supabase.auth.updateUser({ password: passwords.newPass });
+        if (error) throw error;
+      }
+      toast.success('Password updated successfully!');
+      setPasswords({ current: '', newPass: '' });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update password');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      return;
+    }
+    if (!confirm('This will permanently delete all your chatbots, leads, and data. Continue?')) {
+      return;
+    }
+    try {
+      if (supabase) {
+        await supabase.from('profiles').update({ is_active: false }).eq('id', user.id);
+      }
+      logout();
+      navigate('/');
+      toast.success('Account marked for deletion');
+    } catch {
+      toast.error('Failed to delete account');
+    }
+  };
   
   // Get user's bots (or all bots if admin)
   const userBots = getUserBots();
@@ -65,15 +137,24 @@ export default function UserDashboard() {
           .order('created_at', { ascending: false });
         if (botsError) console.error('Error fetching chatbots:', botsError);
         if (bots) setDbChatbots(bots);
-        
-        // Fetch user subscription to get tier (use maybeSingle for null)
+
+        // Fetch user subscription to get tier
         const { data: subscription } = await supabase
           .from('user_subscriptions')
           .select('*, tier:subscription_tiers(*)')
           .eq('user_id', user.id)
           .eq('status', 'active')
           .maybeSingle();
-        
+
+        if (subscription) {
+          setSubscription({
+            tier_name: subscription.tier?.name || 'Free',
+            tier_id: subscription.tier_id || 'free',
+            status: subscription.status,
+            expires_at: subscription.expires_at
+          });
+        }
+
         // Fetch pricing tiers
         const { data: tiers, error: tiersError } = await supabase
           .from('subscription_tiers')
@@ -389,9 +470,18 @@ export default function UserDashboard() {
                       setPRD(newPRD);
                       navigate('/prd');
                     }, icon: Plus },
-                    { label: 'View Analytics', action: () => {}, icon: TrendingUp },
-                    { label: 'Export Data', action: () => {}, icon: Copy },
-                    { label: 'Get Help', action: () => {}, icon: MessageSquare }
+                    { label: 'View Analytics', action: () => navigate('/analytics'), icon: TrendingUp },
+                    { label: 'Export Data', action: () => {
+                      const blob = new Blob([JSON.stringify({ chatbots: user.chatbots, stats }, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `flowvibe_export_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success('Data exported successfully!');
+                    }, icon: Copy },
+                    { label: 'Get Help', action: () => navigate('/guide'), icon: MessageSquare }
                   ].map((action, i) => (
                     <button
                       key={i}
@@ -578,7 +668,8 @@ export default function UserDashboard() {
                     <label className="block text-slate-400 mb-2 text-sm">Company Name</label>
                     <input
                       type="text"
-                      defaultValue={user.companyName || ''}
+                      value={profile.companyName}
+                      onChange={(e) => setProfile({ ...profile, companyName: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
@@ -586,17 +677,18 @@ export default function UserDashboard() {
                     <label className="block text-slate-400 mb-2 text-sm">Location</label>
                     <input
                       type="text"
-                      defaultValue={user.location || ''}
+                      value={profile.location}
+                      onChange={(e) => setProfile({ ...profile, location: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
                 </div>
-                <button className="mt-4 px-6 py-2 bg-cyan-500 text-white rounded-lg">
-                  Save Changes
+                <button onClick={handleSaveProfile} disabled={profileLoading} className="mt-4 px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg flex items-center gap-2">
+                  {profileLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
 
-              {/* Subscription Settings */}
+{/* Subscription Settings */}
               <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">
                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-cyan-400" />
@@ -604,14 +696,20 @@ export default function UserDashboard() {
                 </h3>
                 <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg">
                   <div>
-                    <p className="text-white font-medium">Pro Plan</p>
-                    <p className="text-slate-400 text-sm">₹499/month • Renews on Jan 1, 2026</p>
+                    <p className="text-white font-medium">
+                      {subscription ? subscription.tier_name : 'Free Plan'}
+                    </p>
+                    <p className="text-slate-400 text-sm">
+                      {subscription
+                        ? `Renews on ${new Date(subscription.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : 'Upgrade for unlimited access'}
+                    </p>
                   </div>
-                  <button 
-onClick={upgradeClicked}
+                  <button
+                    onClick={upgradeClicked}
                     className="px-4 py-2 bg-purple-500 text-white rounded-lg"
                   >
-                    Upgrade
+                    {subscription ? 'Manage' : 'Upgrade'}
                   </button>
                 </div>
               </div>
@@ -627,6 +725,8 @@ onClick={upgradeClicked}
                     <label className="block text-slate-400 mb-2 text-sm">Current Password</label>
                     <input
                       type="password"
+                      value={passwords.current}
+                      onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
                       placeholder="Enter current password"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
@@ -635,12 +735,14 @@ onClick={upgradeClicked}
                     <label className="block text-slate-400 mb-2 text-sm">New Password</label>
                     <input
                       type="password"
-                      placeholder="Enter new password"
+                      value={passwords.newPass}
+                      onChange={(e) => setPasswords({ ...passwords, newPass: e.target.value })}
+                      placeholder="Enter new password (min 8 chars)"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
-                  <button className="px-6 py-2 bg-cyan-500 text-white rounded-lg">
-                    Update Password
+                  <button onClick={handleUpdatePassword} disabled={passwordLoading} className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg flex items-center gap-2">
+                    {passwordLoading ? 'Updating...' : 'Update Password'}
                   </button>
                 </div>
               </div>
@@ -651,7 +753,7 @@ onClick={upgradeClicked}
                 <p className="text-slate-400 text-sm mb-4">
                   Once you delete your account, there is no going back. Please be certain.
                 </p>
-                <button className="px-6 py-2 bg-red-500/20 text-red-400 border border-red-500 rounded-lg">
+                <button onClick={handleDeleteAccount} className="px-6 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500 rounded-lg">
                   Delete Account
                 </button>
               </div>

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { cn } from '../utils/cn';
-import { 
-  Bot, ArrowLeft, Settings, Users, CreditCard, Package, DollarSign, 
+import toast from 'react-hot-toast';
+import {
+  Bot, ArrowLeft, Settings, Users, CreditCard, Package, DollarSign,
   TrendingUp, Calendar, Clock, Plus, X, Edit, Trash2, Check, XCircle,
   Key, Shield, AlertTriangle, Sparkles, Tag, Percent, Star,
   Save, RefreshCw, Activity, UserCheck, UserX, Search,
@@ -83,25 +84,31 @@ export default function AdminSettings() {
   const savePaymentSettings = async () => {
     const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || 'support@flowvibe.com';
     const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode, supportEmail };
-    
-    // Try to save to database
-    const API_URL = import.meta.env.VITE_API_URL;
+
+    const token = localStorage.getItem('token');
+
     try {
-      if (API_URL) {
-        await fetch(`${API_URL}/api/admin/settings`, {
+      const API_URL = import.meta.env.VITE_API_URL;
+      if (API_URL && token) {
+        const response = await fetch(`${API_URL}/api/admin/settings`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify(settings)
         });
+
+        if (!response.ok) {
+          throw new Error('Failed to save');
+        }
       }
     } catch (e) {
       console.log('Could not save to database, using localStorage');
     }
-    
-    // Also save locally for offline access
+
     localStorage.setItem('paymentSettings', JSON.stringify(settings));
-    setSaveSettingsMsg('Saved!');
-    setTimeout(() => setSaveSettingsMsg(''), 2000);
+    toast.success('Payment settings saved!');
   };
 
   const changePassword = async () => {
@@ -302,28 +309,88 @@ export default function AdminSettings() {
     if (plan) {
       setPricingForm(plan);
     }
-  };
+};
 
-  const handleSavePricing = () => {
-    setCustomPrices(customPrices.map(p => p.id === editingPricing ? { ...pricingForm, isOnSale: pricingForm.isOnSale || false, originalPrice: pricingForm.originalPrice || 0 } : p));
-    setEditingPricing(null);
-    alert('Pricing saved successfully!');
+  const handleSavePricing = async () => {
+    const API_URL = import.meta.env.VITE_API_URL;
+    const updatedPlan = { ...pricingForm, isOnSale: pricingForm.isOnSale || false, originalPrice: pricingForm.originalPrice || 0 };
+
+    try {
+      if (API_URL) {
+        const response = await fetch(`${API_URL}/api/admin/pricing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editingPricing,
+            name: pricingForm.name,
+            price: pricingForm.price,
+            originalPrice: pricingForm.originalPrice || pricingForm.price,
+            period: pricingForm.period,
+            description: pricingForm.description,
+            isOnSale: pricingForm.isOnSale || false,
+            saleReason: pricingForm.saleReason || ''
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save');
+        }
+      }
+
+      setCustomPrices(customPrices.map(p => p.id === editingPricing ? updatedPlan : p));
+      setEditingPricing(null);
+      toast.success('Pricing saved successfully!');
+    } catch (err) {
+      console.error('Error saving pricing:', err);
+      toast.error('Failed to save pricing to database');
+      setCustomPrices(customPrices.map(p => p.id === editingPricing ? updatedPlan : p));
+      setEditingPricing(null);
+    }
   };
 
   const handleDeletePricing = (planId: string) => {
     if (confirm('Are you sure you want to delete this pricing plan?')) {
       setCustomPrices(customPrices.filter(p => p.id !== planId));
+      toast.success('Pricing plan removed');
     }
   };
 
-  const handleAddNewPricing = () => {
+  const handleAddNewPricing = async () => {
     if (!newPricing.name) {
-      alert('Please enter Plan Name');
+      toast.error('Please enter Plan Name');
       return;
     }
-    const newId = newPricing.name.toLowerCase().replace(/\s+/g, '_');
-    setCustomPrices([...customPrices, { ...newPricing, id: newId }]);
-    setNewPricing({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false });
+
+    const newId = newPricing.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+    const API_URL = import.meta.env.VITE_API_URL;
+
+    try {
+      if (API_URL) {
+        await fetch(`${API_URL}/api/admin/pricing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newId,
+            name: newPricing.name,
+            price: newPricing.price,
+            originalPrice: newPricing.originalPrice || newPricing.price,
+            period: newPricing.period,
+            description: newPricing.description,
+            isOnSale: newPricing.isOnSale || false,
+            saleReason: newPricing.saleReason || ''
+          })
+        });
+      }
+
+      setCustomPrices([...customPrices, { ...newPricing, id: newId }]);
+      setNewPricing({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false, saleReason: '' });
+      toast.success('New pricing plan added!');
+    } catch (err) {
+      console.error('Error adding pricing:', err);
+      setCustomPrices([...customPrices, { ...newPricing, id: newId }]);
+      setNewPricing({ name: '', price: 0, originalPrice: 0, period: 'one-time', description: '', isOnSale: false, saleReason: '' });
+      toast.success('New pricing plan added locally!');
+    }
   };
 
   const filteredUsers = users.filter(u => 

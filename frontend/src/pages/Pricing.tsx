@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Sparkles, Shield, Clock } from 'lucide-react';
+import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Sparkles, Shield, Clock, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { CURRENCIES, convertPrice, formatPrice, setCurrency } from '../lib/currency';
+import { useCurrency } from '../hooks/useCurrency';
 
 const planFeatures: Record<string, string[]> = {
   'free': ['1 Chatbot', '50 Conversations', 'Basic Widget', 'All Flow Features'],
@@ -30,34 +32,50 @@ const defaultPlans = [
 export default function Pricing() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useChatbotStore();
+  const { currency: detectedCurrency, loading: currencyLoading } = useCurrency();
+  const [selectedCurrency, setSelectedCurrency] = useState(detectedCurrency);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [plans, setPlans] = useState<any[]>(defaultPlans);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi'>('card');
 
   useEffect(() => {
+    if (!currencyLoading) {
+      setSelectedCurrency(detectedCurrency);
+    }
+  }, [detectedCurrency, currencyLoading]);
+
+  const handleCurrencyChange = (countryCode: string) => {
+    setSelectedCurrency(countryCode);
+    setCurrency(countryCode);
+    setShowCurrencyPicker(false);
+  };
+
+  useEffect(() => {
     async function fetchPlans() {
       try {
         const { data, error } = await supabase
-          .from('pricing_plans')
+          .from('subscription_tiers')
           .select('*')
-          .order('price', { ascending: true });
-        
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
+
         if (error) throw error;
-        
+
         if (data && data.length > 0) {
           setPlans(data.map((plan: any) => ({
-            id: plan.id,
+            id: plan.tier_key || plan.id,
             name: plan.name,
             price: plan.price,
             originalPrice: plan.original_price,
             period: plan.period,
             description: plan.description || '',
-            features: planFeatures[plan.id] || [],
+            features: plan.metadata?.features || [],
             validFor: plan.period === 'forever' ? 'Forever' : 'Lifetime',
             isOnSale: plan.is_on_sale,
             saleTitle: plan.sale_reason || 'Sale',
-            popular: plan.id === 'pro'
+            popular: plan.is_featured || false
           })));
         }
       } catch (err) {
@@ -77,8 +95,13 @@ export default function Pricing() {
     setSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]);
   };
 
-  const addonTotal = selectedAddons.reduce((sum, id) => sum + (addons.find(a => a.id === id)?.price || 0), 0);
-  const totalPrice = (plans.find(p => p.id === selectedPlan)?.price || 0) + addonTotal;
+  const addonTotal = selectedAddons.reduce((sum, id) => {
+    const addon = addons.find(a => a.id === id);
+    return sum + (addon ? convertPrice(addon.price, selectedCurrency) : 0);
+  }, 0);
+
+  const getPlanPrice = (planPrice: number) => convertPrice(planPrice, selectedCurrency);
+  const currencyConfig = CURRENCIES[selectedCurrency] || CURRENCIES.IN;
 
   const handlePurchase = async () => {
     setProcessing(true);
@@ -106,7 +129,26 @@ export default function Pricing() {
       <button onClick={() => navigate('/')} className="flex items-center gap-2 text-slate-400 hover:text-white mb-6"><ArrowLeft className="w-5 h-5" />Back</button>
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-2">Choose Your Plan</h1>
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <h1 className="text-4xl font-bold text-white">Choose Your Plan</h1>
+            <div className="relative">
+              <button onClick={() => setShowCurrencyPicker(!showCurrencyPicker)} className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-300 hover:border-cyan-500 transition-colors">
+                <Globe className="w-4 h-4" />
+                <span>{currencyConfig.flag} {currencyConfig.code}</span>
+              </button>
+              {showCurrencyPicker && (
+                <div className="absolute top-full mt-2 right-0 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-10 w-48">
+                  {Object.entries(CURRENCIES).map(([code, config]) => (
+                    <button key={code} onClick={() => handleCurrencyChange(code)} className={`w-full px-4 py-2 text-left hover:bg-slate-700 flex items-center gap-2 ${selectedCurrency === code ? 'text-cyan-400' : 'text-slate-300'}`}>
+                      <span>{config.flag}</span>
+                      <span>{config.code}</span>
+                      <span className="text-slate-500 text-sm">- {config.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <p className="text-slate-400">Select the perfect plan for your business</p>
         </div>
 
@@ -117,15 +159,15 @@ export default function Pricing() {
               {plan.isOnSale && <div className="absolute top-4 right-4 flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs"><Sparkles className="w-3 h-3" />{plan.saleTitle}</div>}
               <h3 className="text-xl font-bold text-white mb-2">{plan.name}</h3>
               <div className="mb-4">
-                {plan.originalPrice > 0 && <span className="text-slate-500 line-through mr-2">₹{plan.originalPrice}</span>}
-                <span className="text-4xl font-bold text-white">₹{plan.price}</span>
+                {plan.originalPrice > 0 && <span className="text-slate-500 line-through mr-2">{formatPrice(getPlanPrice(plan.originalPrice), selectedCurrency)}</span>}
+                <span className="text-4xl font-bold text-white">{formatPrice(getPlanPrice(plan.price), selectedCurrency)}</span>
                 {plan.price > 0 && <span className="text-slate-400 ml-1">one-time</span>}
               </div>
               <p className="text-cyan-400 text-sm mb-4">{plan.validFor}</p>
               <p className="text-slate-400 text-sm mb-4">{plan.description}</p>
               <ul className="space-y-3 mb-6">{plan.features.map((feature, i) => (<li key={i} className="flex items-center gap-2 text-slate-300 text-sm"><Check className="w-4 h-4 text-green-400 flex-shrink-0" />{feature}</li>))}</ul>
-              <button onClick={() => navigate('/payment', { state: { plan: plan.id, addons: selectedAddons, total: totalPrice } })} disabled={plan.price === 0 || !isAuthenticated} className={`w-full py-3 rounded-xl font-medium transition-all ${plan.popular ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white hover:from-cyan-400 hover:to-purple-500' : 'border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20'} disabled:opacity-50`}>
-                {!isAuthenticated ? 'Login to Buy' : plan.price === 0 ? 'Current Plan' : 'Buy Now'}
+              <button onClick={() => setSelectedPlan(plan.id)} disabled={plan.price === 0 || !isAuthenticated} className={`w-full py-3 rounded-xl font-medium transition-all ${plan.popular ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white hover:from-cyan-400 hover:to-purple-500' : 'border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20'} disabled:opacity-50`}>
+                {!isAuthenticated ? 'Login to Buy' : plan.price === 0 ? 'Current Plan' : 'Select'}
               </button>
             </div>
           ))}
@@ -146,7 +188,7 @@ export default function Pricing() {
                     {selectedAddons.includes(addon.id) && <Check className="w-4 h-4 text-white" />}
                   </div>
                 </div>
-                <div className="flex items-baseline gap-1 mb-3"><span className="text-2xl font-bold text-white">₹{addon.price}</span><span className="text-slate-400">one-time</span></div>
+                <div className="flex items-baseline gap-1 mb-3"><span className="text-2xl font-bold text-white">{formatPrice(convertPrice(addon.price, selectedCurrency), selectedCurrency)}</span><span className="text-slate-400">one-time</span></div>
                 <ul className="space-y-1">{addon.features.map((feature, i) => (<li key={i} className="flex items-center gap-2 text-slate-300 text-xs"><Check className="w-3 h-3 text-green-400 flex-shrink-0" />{feature}</li>))}</ul>
               </div>
             ))}
@@ -156,11 +198,11 @@ export default function Pricing() {
         {selectedPlan && plans.find(p => p.id === selectedPlan)?.price > 0 && (
           <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-2xl mx-auto">
             <h3 className="text-2xl font-bold text-white mb-2">{plans.find(p => p.id === selectedPlan)?.name} Plan</h3>
-            {selectedAddons.length > 0 && <p className="text-cyan-400 text-lg mb-4">+ {selectedAddons.length} addons (₹{addonTotal} one-time)</p>}
-            <p className="text-slate-400 mb-6">Total: <span className="text-3xl font-bold text-white">₹{totalPrice}</span> one-time</p>
-            
-            <div className="flex items-center gap-2 mb-6 text-slate-400 text-sm"><Shield className="w-4 h-4 text-green-400" />Secure payment powered by Razorpay</div>
-            
+            {selectedAddons.length > 0 && <p className="text-cyan-400 text-lg mb-4">+ {selectedAddons.length} addons ({formatPrice(addonTotal, selectedCurrency)} one-time)</p>}
+            <p className="text-slate-400 mb-6">Total: <span className="text-3xl font-bold text-white">{formatPrice(addonTotal + getPlanPrice(plans.find(p => p.id === selectedPlan)?.price || 0), selectedCurrency)}</span> one-time</p>
+
+            <div className="flex items-center gap-2 mb-6 text-slate-400 text-sm"><Shield className="w-4 h-4 text-green-400" />Secure payment</div>
+
             {!isAuthenticated ? (
               <div className="text-center">
                 <p className="text-slate-400 mb-4">Please login to complete your purchase</p>
@@ -170,7 +212,7 @@ export default function Pricing() {
                 </div>
               </div>
             ) : (
-              <button onClick={() => navigate('/payment', { state: { plan: selectedPlan, addons: selectedAddons, total: totalPrice } })} className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-xl">
+              <button onClick={() => navigate('/payment', { state: { plan: selectedPlan, addons: selectedAddons } })} className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-xl">
                 Proceed to Payment
               </button>
             )}

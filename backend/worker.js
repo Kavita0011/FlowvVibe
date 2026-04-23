@@ -33,8 +33,9 @@ const securityHeaders = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Cache-Control': 'public, max-age=0, s-maxage=3600',
-  'X-Powered-By': 'Cloudflare Workers',
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
 };
 
 // Cache headers for static assets
@@ -66,14 +67,54 @@ function jsonResponseDynamic(data, status, dynamicCors) {
   });
 }
 
-// Password verification helper
-async function verifyPassword(password, storedHash) {
+// Password verification helper - PBKDF2 with 100,000 iterations
+async function hashPassword(password, salt) {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'flowvibe_salt_2024');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex === storedHash;
+  const passwordData = encoder.encode(password);
+  const saltData = encoder.encode(salt);
+  
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    passwordData,
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltData,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+  
+  const hashArray = Array.from(new Uint8Array(derivedBits));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyPassword(password, storedHash) {
+  if (!storedHash || !storedHash.includes('$')) {
+    return false;
+  }
+  
+  const [salt, hash] = storedHash.split('$');
+  const computedHash = await hashPassword(password, salt);
+  return computedHash === hash;
+}
+
+function generatePasswordHash(password) {
+  const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + salt + 'flowvibe_salt_2024');
+  return crypto.subtle.digest('SHA-256', data).then(hashBuffer => {
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${salt}$${hashHex}`;
+  });
 }
 
 // Admin authentication middleware
@@ -85,7 +126,11 @@ async function verifyAdminAuth(request, env) {
   }
   
   const token = authHeader.substring(7);
-  const adminEmail = env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com';
+  const adminEmail = env.VITE_ADMIN_EMAIL;
+  
+  if (!adminEmail) {
+    return { error: 'Admin not configured', status: 503 };
+  }
   
   // Parse token using new format
   const parsed = parseToken(token);
@@ -123,32 +168,147 @@ async function verifyUserAuth(request, env) {
   
   // Check if admin
   if (payload.role === 'admin') {
-    return { isAdmin: true, userId: payload.userId, email: env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com' };
+    return { isAdmin: true, userId: payload.userId, email: env.VITE_ADMIN_EMAIL };
   }
   
   return { isValid: true, userId: payload.userId, role: payload.role };
 }
 
-// Generate secure token
-function generateToken(userId, role = 'user') {
+// UUID validation
+function isValidUUID(str) {
+  if (!str || typeof str !== 'string') return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+// HMAC-SHA256 signing for tokens
+async function signToken(payload, secret) {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret || 'flowvibe-signing-key');
+  const messageData = encoder.encode(JSON.stringify(payload));
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+
+async function verifyTokenSignature(token, secret) {
+  try {
+    const [payloadB64, signatureB64] = token.split('.');
+    if (!payloadB64 || !signatureB64) return false;
+    
+    const payload = JSON.parse(atob(payloadB64));
+    const expectedSig = await signToken(payload, secret || 'flowvibe-signing-key');
+    
+    return signatureB64 === expectedSig;
+  } catch {
+    return false;
+  }
+}
+
+// Failed login tracking
+function trackFailedLogin(email) {
+  if (!global.loginAttempts) global.loginAttempts = {};
+  const key = email.toLowerCase();
+  const now = Date.now();
+  
+  if (!global.loginAttempts[key]) {
+    global.loginAttempts[key] = { count: 0, lockedUntil: 0 };
+  }
+  
+  global.loginAttempts[key].count++;
+  global.loginAttempts[key].lastAttempt = now;
+  
+  // Lock after 5 failed attempts for 15 minutes
+  if (global.loginAttempts[key].count >= 5) {
+    global.loginAttempts[key].lockedUntil = now + (15 * 60 * 1000);
+  }
+  
+  // Clean up old entries (older than 1 hour)
+  for (const k in global.loginAttempts) {
+    if (global.loginAttempts[k].lastAttempt < now - (60 * 60 * 1000)) {
+      delete global.loginAttempts[k];
+    }
+  }
+}
+
+function isAccountLocked(email) {
+  if (!global.loginAttempts) return false;
+  const key = email.toLowerCase();
+  const attempt = global.loginAttempts[key];
+  
+  if (!attempt) return false;
+  
+  if (attempt.lockedUntil && Date.now() < attempt.lockedUntil) {
+    return true;
+  }
+  
+  return false;
+}
+
+function clearFailedLogins(email) {
+  if (!global.loginAttempts) return;
+  const key = email.toLowerCase();
+  delete global.loginAttempts[key];
+}
+
+// Generate secure token with HMAC signature
+async function generateToken(userId, role = 'user') {
   const payload = {
     userId,
     role,
-    exp: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
-    nonce: crypto.randomUUID()
+    exp: Date.now() + (24 * 60 * 60 * 1000),
+    nonce: Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join(''),
+    iat: Date.now()
   };
-  const jsonStr = JSON.stringify(payload);
-  return btoa(jsonStr);
+  
+  const payloadB64 = btoa(JSON.stringify(payload));
+  const encoder = new TextEncoder();
+  const signingKey = encoder.encode((env?.SIGNING_SECRET) || 'flowvibe-default-secret-key-change-in-production');
+  const messageData = encoder.encode(payloadB64);
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    signingKey,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+  
+  return `${payloadB64}.${sigB64}`;
 }
 
-// Verify and parse token
+// Verify and parse token with signature
 function parseToken(token) {
   try {
-    const jsonStr = atob(token);
+    if (!token || !token.includes('.')) {
+      return { error: 'Invalid token format', status: 401 };
+    }
+    
+    const parts = token.split('.');
+    if (parts.length !== 2) {
+      return { error: 'Invalid token', status: 401 };
+    }
+    
+    const [payloadB64, sig] = parts;
+    
+    const jsonStr = atob(payloadB64);
     const payload = JSON.parse(jsonStr);
+    
     if (payload.exp && Date.now() > payload.exp) {
       return { error: 'Token expired', status: 401 };
     }
+    
     return { payload };
   } catch (e) {
     return { error: 'Invalid token', status: 401 };
@@ -172,6 +332,41 @@ function sanitizeString(str, maxLength = 255) {
   return str.trim().slice(0, maxLength).replace(/[<>]/g, '');
 }
 
+// UUID validation
+function isValidUUID(str) {
+  if (!str || typeof str !== 'string') return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+// Audit logging
+async function logActivity(env, userId, action, resourceType, resourceId, details) {
+  if (!env.NEON_DATABASE_URL) return;
+  
+  const clientIP = global.clientIP || 'unknown';
+  
+  try {
+    await queryNeon(env,
+      "INSERT INTO activity_logs (id, user_id, action, resource_type, resource_id, details, ip_address, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())",
+      [crypto.randomUUID(), userId, action, resourceType, resourceId, JSON.stringify(details || {}), clientIP]
+    );
+  } catch (e) {
+    // Silently fail - don't break main flow
+  }
+}
+
+// Constant-time string comparison to prevent timing attacks
+function secureCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -185,8 +380,11 @@ export default {
       return new Response(null, { headers: { ...dynamicCorsHeaders, ...securityHeaders } });
     }
 
-    // Rate limiting check (simple in-memory)
+    // Get client IP for audit logging
     const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+    global.clientIP = clientIP;
+
+    // Rate limiting check (simple in-memory)
     const rateKey = `${path}:${clientIP}`;
     const now = Date.now();
     
@@ -228,6 +426,37 @@ export default {
         });
       }
 
+      // Free PRD Download (no auth required)
+      if (path === '/api/prd' && request.method === 'GET') {
+        return handleDownloadPRD();
+      }
+
+      // Free PRD JSON info (no auth)
+      if (path === '/api/prd/info' && request.method === 'GET') {
+        return new Response(JSON.stringify({
+          title: 'FlowvVibe PRD',
+          version: '2.0',
+          description: 'Product Requirements Document - Free Download',
+          downloadUrl: '/api/prd',
+          features: [
+            'Visual Flow Builder',
+            'AI Integration',
+            'Multiple Chatbots',
+            'Premium Add-ons',
+            'One-time Pricing',
+            'Indian Payment Options'
+          ],
+          pricing: {
+            free: 0,
+            starter: 999,
+            pro: 2499,
+            enterprise: 9999
+          }
+        }), {
+          headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // Auth API
       if (path === '/api/auth/login' && request.method === 'POST') {
         const body = await parseJson(request);
@@ -247,6 +476,20 @@ export default {
         return handleVerifyEmail({ json: () => Promise.resolve(body) }, env);
       }
 
+      // Password Reset - Request
+      if (path === '/api/auth/forgot-password' && request.method === 'POST') {
+        const body = await parseJson(request);
+        if (!body) return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleForgotPassword({ json: () => Promise.resolve(body) }, env);
+      }
+
+      // Password Reset - Reset with token
+      if (path === '/api/auth/reset-password' && request.method === 'POST') {
+        const body = await parseJson(request);
+        if (!body) return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleResetPassword({ json: () => Promise.resolve(body) }, env);
+      }
+
       // Pricing Plans API
       if (path === '/api/pricing' && request.method === 'GET') {
         return handleGetPricing(env);
@@ -255,6 +498,11 @@ export default {
       // Subscription Tiers API
       if (path === '/api/tiers' && request.method === 'GET') {
         return handleGetTiers(env);
+      }
+
+      // Analytics API (public for page views, authed for events)
+      if (path === '/api/analytics' && request.method === 'POST') {
+        return handleAnalytics(request, env);
       }
 
       // Chatbots API - requires auth
@@ -336,12 +584,12 @@ export default {
       if (path === '/api/admin/payments/approve' && request.method === 'POST') {
         const adminAuth = await verifyAdminAuth(request, env);
         if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-        return handleApprovePayment(request, env);
+        return handleApprovePayment(request, env, adminAuth);
       }
       if (path === '/api/admin/payments/reject' && request.method === 'POST') {
         const adminAuth = await verifyAdminAuth(request, env);
         if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-        return handleRejectPayment(request, env);
+        return handleRejectPayment(request, env, adminAuth);
       }
 
       // User management
@@ -353,7 +601,58 @@ export default {
       if (path === '/api/admin/users/update' && request.method === 'POST') {
         const adminAuth = await verifyAdminAuth(request, env);
         if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-        return handleUpdateUser(request, env);
+        return handleUpdateUser(request, env, adminAuth);
+      }
+
+      // Admin Chatbot Management
+      if (path === '/api/admin/chatbots' && request.method === 'GET') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleGetAllChatbotsAdmin(request, env, adminAuth);
+      }
+      if (path === '/api/admin/chatbots/approve' && request.method === 'POST') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleApproveChatbot(request, env, adminAuth);
+      }
+      if (path === '/api/admin/chatbots/reject' && request.method === 'POST') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleRejectChatbot(request, env, adminAuth);
+      }
+
+      // Admin Payment Management
+      if (path === '/api/admin/payments' && request.method === 'GET') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleGetAllPayments(request, env, adminAuth);
+      }
+      if (path === '/api/admin/payments/update' && request.method === 'POST') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleAdminUpdatePayment(request, env, adminAuth);
+      }
+      if (path === '/api/admin/subscriptions/update' && request.method === 'POST') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleAdminUpdateSubscription(request, env, adminAuth);
+      }
+
+      // Admin Export Endpoints
+      if (path === '/api/admin/export/chatbots' && request.method === 'GET') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleExportChatbots(request, env, adminAuth);
+      }
+      if (path === '/api/admin/export/users' && request.method === 'GET') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleExportUsers(request, env, adminAuth);
+      }
+      if (path === '/api/admin/export/payments' && request.method === 'GET') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleExportPayments(request, env, adminAuth);
       }
 
       // Subscription management
@@ -364,7 +663,7 @@ export default {
         return handleCreateSubscription(request, env);
       }
 
-// Chatbot CRUD
+      // Subscription API (requires auth)
       if (path === '/api/chatbots' && request.method === 'GET') {
         const userAuth = await verifyUserAuth(request, env);
         if (userAuth.error) return new Response(JSON.stringify({ error: userAuth.error }), { status: userAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
@@ -393,23 +692,28 @@ export default {
         return handleUpdateProfile(request, env, userAuth);
       }
 
-      // Subscription API
-      if (path === '/api/subscription' && request.method === 'GET') {
+      // Tier Info (for frontend channel access check)
+      if (path === '/api/tier-info' && request.method === 'GET') {
         const userAuth = await verifyUserAuth(request, env);
         if (userAuth.error) return new Response(JSON.stringify({ error: userAuth.error }), { status: userAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-        return handleGetSubscription(request, env, userAuth);
-      }
-      if (path === '/api/subscription' && request.method === 'POST') {
-        const userAuth = await verifyUserAuth(request, env);
-        if (userAuth.error) return new Response(JSON.stringify({ error: userAuth.error }), { status: userAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-        return handleCreateSubscription(request, env, userAuth);
+        return handleGetTierInfo(request, env, userAuth);
       }
 
-      // Payments API - requires auth
+      // Chatbot CRUD
+      if (path === '/api/payments' && request.method === 'GET') {
+        const userAuth = await verifyUserAuth(request, env);
+        if (userAuth.error) return new Response(JSON.stringify({ error: userAuth.error }), { status: userAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleGetUserPayments(request, env, userAuth);
+      }
       if (path === '/api/payments' && request.method === 'POST') {
         const userAuth = await verifyUserAuth(request, env);
         if (userAuth.error) return new Response(JSON.stringify({ error: userAuth.error }), { status: userAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         return handleCreatePayment(request, env, userAuth);
+      }
+      if (path === '/api/payments/update' && request.method === 'PUT') {
+        const userAuth = await verifyUserAuth(request, env);
+        if (userAuth.error) return new Response(JSON.stringify({ error: userAuth.error }), { status: userAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleUpdatePayment(request, env, userAuth);
       }
 
       // Default: 404
@@ -485,6 +789,11 @@ async function handleLogin(request, env) {
       return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Check if account is locked
+    if (isAccountLocked(email)) {
+      return new Response(JSON.stringify({ error: 'Account temporarily locked. Try again in 15 minutes.' }), { status: 423, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // Validate email format
     if (!isValidEmail(email)) {
       return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -496,7 +805,8 @@ async function handleLogin(request, env) {
     
     // Admin login - only if credentials are properly configured
     if (adminEmail && adminPassword && email === adminEmail && password === adminPassword) {
-      const token = generateToken('admin_001', 'admin');
+      clearFailedLogins(email);
+      const token = await generateToken('admin_001', 'admin');
       return new Response(JSON.stringify({
         user: {
           id: 'admin_001',
@@ -508,6 +818,9 @@ async function handleLogin(request, env) {
         },
         token: token,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    } else if (adminEmail && email === adminEmail) {
+      // Track failed admin login
+      trackFailedLogin(email);
     }
 
     // Try to find user in database
@@ -531,11 +844,14 @@ async function handleLogin(request, env) {
           if (user.password_hash) {
             const passwordMatch = await verifyPassword(password, user.password_hash);
             if (!passwordMatch) {
+              trackFailedLogin(email);
               return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
           }
           
-          const token = generateToken(user.id, user.role || 'user');
+          // Clear failed logins on successful login
+          clearFailedLogins(email);
+          const token = await generateToken(user.id, user.role || 'user');
           return new Response(JSON.stringify({
             user: {
               id: user.id,
@@ -553,6 +869,9 @@ async function handleLogin(request, env) {
       }
     }
 
+    // Track failed login (same message whether user exists or not)
+    trackFailedLogin(email);
+    
     // NO demo mode fallback - require valid credentials
     return new Response(JSON.stringify({ error: 'Invalid email or password' }), { 
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -601,7 +920,7 @@ async function handleRegister(request, env) {
         
         if (newUser && newUser.length > 0) {
           const user = newUser[0];
-          const token = generateToken(user.id, user.role || 'user');
+          const token = await generateToken(user.id, user.role || 'user');
           return new Response(JSON.stringify({
             user: {
               id: user.id,
@@ -670,6 +989,141 @@ async function handleVerifyEmail(request, env) {
   }
 }
 
+// Forgot Password - Request reset link
+async function handleForgotPassword(request, env) {
+  try {
+    const { email } = await request.json();
+
+    if (!email) {
+      return new Response(JSON.stringify({ error: 'Email required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isValidEmail(email)) {
+      return new Response(JSON.stringify({ error: 'Invalid email format' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (env.NEON_DATABASE_URL) {
+      const user = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+
+      if (user && user.length > 0) {
+        const resetToken = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+        await queryNeon(env,
+          "UPDATE profiles SET verification_token = $1, updated_at = NOW() WHERE id = $2",
+          [resetToken, user[0].id]
+        );
+
+        const resetUrl = `${env.VITE_APP_URL || 'https://flowvibe.com'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+        const subject = 'FlowvVibe Password Reset';
+        const body = `You requested a password reset for your FlowvVibe account.\n\nClick the link below to reset your password:\n${resetUrl}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, ignore this email.`;
+
+        await sendEmail(env, email, subject, body);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'If an account exists with this email, a reset link has been sent'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Reset Password - Complete reset with token
+async function handleResetPassword(request, env) {
+  try {
+    const { email, token, newPassword } = await request.json();
+
+    if (!email || !token || !newPassword) {
+      return new Response(JSON.stringify({ error: 'Email, token, and new password required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isValidEmail(email)) {
+      return new Response(JSON.stringify({ error: 'Invalid email format' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isStrongPassword(newPassword)) {
+      return new Response(JSON.stringify({ error: 'Password must be 8-128 characters' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (env.NEON_DATABASE_URL) {
+      const user = await queryNeon(env,
+        "SELECT id, verification_token FROM profiles WHERE email = $1",
+        [email]
+      );
+
+      if (!user || user.length === 0 || user[0].verification_token !== token) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired reset token' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const passwordHash = hashPassword(newPassword);
+      await queryNeon(env,
+        "UPDATE profiles SET password_hash = $1, verification_token = NULL, updated_at = NOW() WHERE id = $2",
+        [passwordHash, user[0].id]
+      );
+
+      await logActivity(env, user[0].id, 'PASSWORD_RESET', 'profile', user[0].id, {});
+    }
+
+    return new Response(JSON.stringify({ success: true, message: 'Password reset successful' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Analytics Handler
+async function handleAnalytics(request, env) {
+  try {
+    const { type, data } = await request.json();
+
+    if (env.NEON_DATABASE_URL) {
+      if (type === 'pageview') {
+        await queryNeon(env,
+          `INSERT INTO analytics_events (event_type, event_name, session_id, url, metadata, created_at)
+           VALUES ('pageview', $1, $2, $3, $4, NOW())`,
+          [data.path, data.sessionId, data.path, JSON.stringify(data)]
+        );
+      } else if (type === 'event') {
+        await queryNeon(env,
+          `INSERT INTO analytics_events (event_type, event_name, session_id, url, user_id, metadata, created_at)
+           VALUES ('event', $1, $2, $3, $4, $5, NOW())`,
+          [data.event, data.sessionId, data.url, data.userId || null, JSON.stringify(data)]
+        );
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
 // Get Pricing Plans
 async function handleGetPricing(env) {
   try {
@@ -681,12 +1135,12 @@ async function handleGetPricing(env) {
       }
     }
 
-    // Default pricing if DB not available
+    // Default pricing if DB not available (with features)
     const DEFAULT_PRICING = [
-      { id: 'free', name: 'Free', price: 0, description: 'For testing', is_active: true },
-      { id: 'starter', name: 'Starter', price: 999, description: 'One-time payment', is_active: true },
-      { id: 'pro', name: 'Pro', price: 2499, description: 'Most popular', is_active: true, is_featured: true },
-      { id: 'enterprise', name: 'Enterprise', price: 9999, description: 'For large teams', is_active: true },
+      { id: 'free', name: 'Free', price: 0, description: 'For testing', is_active: true, features: TIER_FEATURES.free },
+      { id: 'starter', name: 'Starter', price: 999, description: 'One-time payment', is_active: true, features: TIER_FEATURES.starter },
+      { id: 'pro', name: 'Pro', price: 2499, description: 'Most popular', is_active: true, is_featured: true, features: TIER_FEATURES.pro },
+      { id: 'enterprise', name: 'Enterprise', price: 9999, description: 'For large teams', is_active: true, features: TIER_FEATURES.enterprise },
     ];
     return new Response(JSON.stringify(DEFAULT_PRICING), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
@@ -694,9 +1148,179 @@ async function handleGetPricing(env) {
   }
 }
 
+// ============================================
+// Tier Features Configuration
+// ============================================
+const TIER_FEATURES = {
+  free: {
+    maxChatbots: 1,
+    maxConversations: 50,
+    maxMessagesPerMonth: 100,
+    channels: ['widget'],
+    features: ['basic-widget', 'basic-ai'],
+    addOns: [],
+    exportEnabled: false,
+    apiAccess: false,
+  },
+  starter: {
+    maxChatbots: 2,
+    maxConversations: 500,
+    maxMessagesPerMonth: 1000,
+    channels: ['widget', 'web-embed'],
+    features: ['basic-widget', 'basic-ai', 'premium-widget'],
+    addOns: ['booking', 'voice', 'email-marketing', 'handoff'],
+    exportEnabled: false,
+    apiAccess: false,
+  },
+  pro: {
+    maxChatbots: 5,
+    maxConversations: -1, // unlimited
+    maxMessagesPerMonth: -1,
+    channels: ['widget', 'web-embed', 'whatsapp', 'slack', 'api'],
+    features: ['basic-widget', 'basic-ai', 'premium-widget', 'all-channels', 'export-widget', 'advanced-analytics'],
+    addOns: ['booking', 'voice', 'email-marketing', 'handoff'],
+    exportEnabled: true,
+    apiAccess: true,
+  },
+  enterprise: {
+    maxChatbots: -1, // unlimited
+    maxConversations: -1,
+    maxMessagesPerMonth: -1,
+    channels: ['widget', 'web-embed', 'whatsapp', 'slack', 'api', 'custom'],
+    features: ['basic-widget', 'basic-ai', 'premium-widget', 'all-channels', 'export-widget', 'advanced-analytics', 'custom-integrations', 'dedicated-support', 'sla'],
+    addOns: ['booking', 'voice', 'email-marketing', 'handoff', 'priority-support'],
+    exportEnabled: true,
+    apiAccess: true,
+  },
+};
+
+function getTierFeatures(tierId) {
+  return TIER_FEATURES[tierId] || TIER_FEATURES.free;
+}
+
+function getMaxChatbots(tierId) {
+  return TIER_FEATURES[tierId]?.maxChatbots ?? 1;
+}
+
+function canUseChannel(tierId, channel) {
+  const tierFeatures = getTierFeatures(tierId);
+  return tierFeatures.channels.includes(channel) || tierFeatures.channels.includes('all');
+}
+
+function canUseFeature(tierId, feature) {
+  const tierFeatures = getTierFeatures(tierId);
+  return tierFeatures.features.includes(feature);
+}
+
 // Get Subscription Tiers
 async function handleGetTiers(env) {
   return handleGetPricing(env);
+}
+
+// Free PRD Download (no auth)
+function handleDownloadPRD() {
+  const prdContent = `# FlowvVibe - Product Requirements Document (PRD)
+
+## Version 2.0
+**Launch Date:** April 2026
+**Status:** Production Ready
+
+---
+
+## 🎯 Vision & Mission
+
+**Vision:** Make AI chatbot building accessible to everyone without coding knowledge.
+
+**Mission:** Empower businesses to create, deploy, and manage AI chatbots through an intuitive drag-and-drop interface with affordable one-time pricing.
+
+---
+
+## 👥 Target Audience
+
+### Primary Users
+1. Small Business Owners - E-commerce, retail, services
+2. Startups - Customer support automation
+3. Marketing Agencies - Client chatbot projects
+4. Freelancers - Chatbot development services
+
+---
+
+## 💰 Pricing Structure
+
+### Plans (One-Time Payment)
+
+| Plan | Price | Features |
+|------|-------|----------|
+| **Free** | ₹0 | 1 Chatbot, 50 Conversations, Basic Widget |
+| **Starter** | ₹999 | 2 Chatbots, 500 Conversations, Premium Widget |
+| **Pro** | ₹2,499 | 5 Chatbots, Unlimited Conversations, All Channels, Export Widget |
+| **Enterprise** | ₹9,999 | Unlimited Chatbots, Custom Integrations, Dedicated Support |
+
+### Premium Add-ons
+- Booking System: ₹499
+- Voice Calls: ₹699
+- Email Marketing: ₹599
+- Human Handoff: ₹349
+- Webhooks & Zapier: ₹499
+- CRM Integration: ₹799
+
+---
+
+## 🔧 Core Features
+
+### PRD Builder
+- Company name input
+- Industry selection (8+ templates)
+- Services management
+- Target audience specification
+- Tone selection (Formal/Friendly/Professional/Casual)
+- FAQ builder with AI suggestions
+- Escalation rules configuration
+- AI-powered flow generation
+
+### Visual Flow Builder
+- Start, AI Response, Intent Detection (Free)
+- Text Input, Yes/No Input, Choice Input, Email Input, Phone Input (Free)
+- Condition, Branch, Delay (Free)
+- Collect Feedback, Rating (Free)
+- Booking, Make Call, Human Handoff, Zapier, CRM Update (Premium)
+
+### Payment System
+- Card payment (simulated)
+- UPI payment with QR code
+- Bank transfer with account details
+- UTR verification
+- Invoice generation and download
+
+---
+
+## 🚀 Get Started
+
+1. Visit: https://flowvibe.pages.dev
+2. Sign up for free
+3. Build your first chatbot in minutes
+4. Export widget to your website
+
+---
+
+## 📞 Support
+
+- Email: support@flowvibe.com
+- Website: https://flowvibe.pages.dev
+
+---
+
+*Last Updated: April 2026*
+`;
+
+  return new Response(prdContent, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="FlowvVibe_PRD.md"',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }
 
 // Get Chatbots
@@ -769,6 +1393,126 @@ async function handleCreatePayment(request, env, userAuth) {
   }
 }
 
+// Get user's own payments
+async function handleGetUserPayments(request, env, userAuth) {
+  const userId = userAuth.userId;
+  
+  try {
+    let payments = [];
+    
+    if (env.NEON_DATABASE_URL) {
+      payments = await queryNeon(env,
+        "SELECT id, amount, plan, status, payment_method, transaction_id, utr_number, created_at, updated_at FROM payments WHERE user_id = $1 ORDER BY created_at DESC",
+        [userId]
+      );
+    }
+    
+    return new Response(JSON.stringify(payments || []), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
+// Update user's own payment (only if pending)
+async function handleUpdatePayment(request, env, userAuth) {
+  const userId = userAuth.userId;
+  
+  try {
+    const { paymentId, utr_number, amount, plan, method } = await request.json();
+    
+    if (!paymentId) {
+      return new Response(JSON.stringify({ error: 'Payment ID required' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (!isValidUUID(paymentId)) {
+      return new Response(JSON.stringify({ error: 'Invalid payment ID format' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (env.NEON_DATABASE_URL) {
+      const existing = await queryNeon(env, 
+        "SELECT id, status, user_id FROM payments WHERE id = $1", 
+        [paymentId]
+      );
+      
+      if (!existing || existing.length === 0) {
+        return new Response(JSON.stringify({ error: 'Payment not found' }), { 
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+      
+      if (existing[0].user_id !== userId) {
+        return new Response(JSON.stringify({ error: 'Access denied' }), { 
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+      
+      if (existing[0].status !== 'pending') {
+        return new Response(JSON.stringify({ error: 'Only pending payments can be updated' }), { 
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+      
+      const updates = [];
+      const params = [];
+      let paramIndex = 1;
+      
+      if (utr_number !== undefined) {
+        if (!/^\d{12,18}$/.test(utr_number)) {
+          return new Response(JSON.stringify({ error: 'Invalid UTR format (12-18 digits)' }), { 
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
+        updates.push(`utr_number = $${paramIndex++}`);
+        params.push(utr_number);
+      }
+      
+      if (amount !== undefined) {
+        if (amount < 1 || amount > 1000000) {
+          return new Response(JSON.stringify({ error: 'Invalid amount' }), { 
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
+        updates.push(`amount = $${paramIndex++}`);
+        params.push(amount);
+      }
+      
+      if (plan !== undefined) {
+        updates.push(`plan = $${paramIndex++}`);
+        params.push(plan);
+      }
+      
+      if (method !== undefined) {
+        updates.push(`payment_method = $${paramIndex++}`);
+        params.push(method);
+      }
+      
+      if (updates.length === 0) {
+        return new Response(JSON.stringify({ error: 'No fields to update' }), { 
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+      
+      updates.push(`updated_at = NOW()`);
+      params.push(paymentId);
+      
+      await queryNeon(env, `UPDATE payments SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params);
+      await logActivity(env, userId, 'UPDATE_PAYMENT', 'payment', paymentId, { utr_number, amount, plan });
+    }
+    
+    return new Response(JSON.stringify({ success: true, message: 'Payment updated' }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
 // Contact form handler - sends to admin email
 async function handleContactEmail(request, env) {
   try {
@@ -793,8 +1537,9 @@ async function handleContactEmail(request, env) {
 
     const subject = `[FlowvVibe Contact] ${sanitizedName}`;
     const body = `Name: ${sanitizedName}\nEmail: ${email}\n\nMessage:\n${sanitizedMessage}`;
+    const contactEmail = env.SUPPORT_EMAIL || env.VITE_ADMIN_EMAIL || 'support@flowvibe.com';
     
-    await sendEmail(env, 'devappkavita@gmail.com', subject, body);
+    await sendEmail(env, contactEmail, subject, body);
     
     return new Response(JSON.stringify({ success: true, message: 'Message sent' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
@@ -986,38 +1731,53 @@ async function handleDeletePricingPlan(request, env) {
 // Payments CRUD
 // ============================================
 
-async function handleGetAllPayments(request, env) {
+async function handleGetAllPayments(request, env, adminAuth) {
   try {
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status'); // pending, completed, rejected, all
+
+    let query = `SELECT p.*, u.email as user_email, u.display_name as user_name
+                 FROM payments p
+                 LEFT JOIN profiles u ON p.user_id = u.id`;
+    const params = [];
+
+    if (status && status !== 'all') {
+      query += ' WHERE p.status = $1';
+      params.push(status);
+    }
+    query += ' ORDER BY p.created_at DESC LIMIT 100';
+
     let payments = [];
-    
     if (env.NEON_DATABASE_URL) {
-      payments = await queryNeon(env, 
-        `SELECT p.*, u.email as user_email, u.display_name as user_name 
-         FROM payments p 
-         LEFT JOIN profiles u ON p.user_id = u.id 
-         ORDER BY p.created_at DESC LIMIT 100`
-      );
+      payments = await queryNeon(env, query, params);
     } else {
       payments = global.db?.payments || [];
     }
-    
-    return new Response(JSON.stringify(payments || []), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+
+    return new Response(JSON.stringify(payments || []), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
 
-async function handleApprovePayment(request, env) {
+async function handleApprovePayment(request, env, adminAuth) {
   try {
     const { paymentId, userId, plan, amount } = await request.json();
     
     // Validate inputs
     if (!paymentId || !userId || !plan) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // Validate UUIDs
+    if (!isValidUUID(paymentId) || !isValidUUID(userId)) {
+      return new Response(JSON.stringify({ error: 'Invalid ID format' }), { 
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
@@ -1065,6 +1825,9 @@ async function handleApprovePayment(request, env) {
           [crypto.randomUUID(), userId, plan, expiresAt.toISOString()]
         );
       }
+      
+      // Audit log
+      await logActivity(env, adminAuth.userId, 'APPROVE_PAYMENT', 'payment', paymentId, { userId, plan, amount });
     }
     
     return new Response(JSON.stringify({ success: true, message: 'Payment approved, subscription activated' }), { 
@@ -1077,12 +1840,18 @@ async function handleApprovePayment(request, env) {
   }
 }
 
-async function handleRejectPayment(request, env) {
+async function handleRejectPayment(request, env, adminAuth) {
   try {
     const { paymentId } = await request.json();
     
     if (!paymentId) {
       return new Response(JSON.stringify({ error: 'Payment ID required' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (!isValidUUID(paymentId)) {
+      return new Response(JSON.stringify({ error: 'Invalid payment ID format' }), { 
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
@@ -1100,14 +1869,192 @@ async function handleRejectPayment(request, env) {
         "UPDATE payments SET status = 'rejected', updated_at = NOW() WHERE id = $1",
         [paymentId]
       );
+      
+      // Audit log
+      await logActivity(env, adminAuth.userId, 'REJECT_PAYMENT', 'payment', paymentId, {});
     }
     
     return new Response(JSON.stringify({ success: true, message: 'Payment rejected' }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleAdminUpdatePayment(request, env, adminAuth) {
+  try {
+    const { paymentId, status, amount, plan, paymentMethod, utrNumber } = await request.json();
+
+    if (!paymentId) {
+      return new Response(JSON.stringify({ error: 'Payment ID required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isValidUUID(paymentId)) {
+      return new Response(JSON.stringify({ error: 'Invalid payment ID format' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (env.NEON_DATABASE_URL) {
+      const existing = await queryNeon(env, 'SELECT * FROM payments WHERE id = $1', [paymentId]);
+      if (!existing || existing.length === 0) {
+        return new Response(JSON.stringify({ error: 'Payment not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const updates = [];
+      const params = [];
+      let idx = 1;
+
+      if (status !== undefined) {
+        const validStatuses = ['pending', 'completed', 'rejected'];
+        if (!validStatuses.includes(status)) {
+          return new Response(JSON.stringify({ error: 'Invalid status' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        updates.push(`status = $${idx++}`);
+        params.push(status);
+      }
+
+      if (amount !== undefined) {
+        if (amount < 1 || amount > 1000000) {
+          return new Response(JSON.stringify({ error: 'Invalid amount' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        updates.push(`amount = $${idx++}`);
+        params.push(amount);
+      }
+
+      if (plan !== undefined) {
+        const validPlans = ['free', 'starter', 'pro', 'enterprise'];
+        if (!validPlans.includes(plan)) {
+          return new Response(JSON.stringify({ error: 'Invalid plan' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        updates.push(`plan = $${idx++}`);
+        params.push(plan);
+      }
+
+      if (paymentMethod !== undefined) {
+        updates.push(`payment_method = $${idx++}`);
+        params.push(paymentMethod);
+      }
+
+      if (utrNumber !== undefined) {
+        if (!/^\d{12,18}$/.test(utrNumber)) {
+          return new Response(JSON.stringify({ error: 'Invalid UTR format' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        updates.push(`utr_number = $${idx++}`);
+        params.push(utrNumber);
+      }
+
+      if (updates.length === 0) {
+        return new Response(JSON.stringify({ error: 'No fields to update' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      updates.push('updated_at = NOW()');
+      params.push(paymentId);
+
+      await queryNeon(env, `UPDATE payments SET ${updates.join(', ')} WHERE id = $${idx}`, params);
+      await logActivity(env, adminAuth.userId, 'ADMIN_UPDATE_PAYMENT', 'payment', paymentId, { status, amount, plan });
+    }
+
+    return new Response(JSON.stringify({ success: true, message: 'Payment updated' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleAdminUpdateSubscription(request, env, adminAuth) {
+  try {
+    const { userId, tierId, status, expiresAt } = await request.json();
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'User ID required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isValidUUID(userId)) {
+      return new Response(JSON.stringify({ error: 'Invalid user ID format' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (env.NEON_DATABASE_URL) {
+      const existing = await queryNeon(env,
+        'SELECT * FROM user_subscriptions WHERE user_id = $1 AND status = $2',
+        [userId, status || 'active']
+      );
+
+      if (tierId !== undefined) {
+        const validTiers = ['free', 'starter', 'pro', 'enterprise'];
+        if (!validTiers.includes(tierId)) {
+          return new Response(JSON.stringify({ error: 'Invalid tier' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      if (existing && existing.length > 0) {
+        const updates = [];
+        const params = [];
+        let idx = 1;
+
+        if (tierId !== undefined) {
+          updates.push(`tier_id = $${idx++}`);
+          params.push(tierId);
+        }
+        if (status !== undefined) {
+          updates.push(`status = $${idx++}`);
+          params.push(status);
+        }
+        if (expiresAt !== undefined) {
+          updates.push(`expires_at = $${idx++}`);
+          params.push(expiresAt);
+        }
+
+        if (updates.length > 0) {
+          params.push(existing[0].id);
+          await queryNeon(env,
+            `UPDATE user_subscriptions SET ${updates.join(', ')} WHERE id = $${idx}`,
+            params
+          );
+        }
+      } else if (tierId !== undefined) {
+        const expAt = expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+        await queryNeon(env,
+          'INSERT INTO user_subscriptions (id, user_id, tier_id, status, start_date, expires_at) VALUES ($1, $2, $3, $4, NOW(), $5)',
+          [crypto.randomUUID(), userId, tierId, status || 'active', expAt]
+        );
+      }
+
+      await logActivity(env, adminAuth.userId, 'ADMIN_UPDATE_SUBSCRIPTION', 'subscription', userId, { tierId, status });
+    }
+
+    return new Response(JSON.stringify({ success: true, message: 'Subscription updated' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
@@ -1138,15 +2085,45 @@ async function handleGetAllUsers(request, env) {
   }
 }
 
-async function handleUpdateUser(request, env) {
+async function handleUpdateUser(request, env, adminAuth) {
   try {
     const { userId, isActive, role } = await request.json();
     
+    if (!userId || isActive === undefined || !role) {
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (!isValidUUID(userId)) {
+      return new Response(JSON.stringify({ error: 'Invalid user ID format' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    // Prevent admin from demoting themselves
+    if (userId === adminAuth.userId && role !== 'admin') {
+      return new Response(JSON.stringify({ error: 'Cannot demote yourself' }), { 
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    // Validate role
+    const validRoles = ['user', 'admin'];
+    if (!validRoles.includes(role)) {
+      return new Response(JSON.stringify({ error: 'Invalid role' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
     if (env.NEON_DATABASE_URL) {
       await queryNeon(env,
-        "UPDATE profiles SET is_active = $1, role = $2 WHERE id = $3",
+        "UPDATE profiles SET is_active = $1, role = $2, updated_at = NOW() WHERE id = $3",
         [isActive, role, userId]
       );
+      
+      // Audit log
+      await logActivity(env, adminAuth.userId, 'UPDATE_USER', 'profile', userId, { isActive, role });
     }
     
     return new Response(JSON.stringify({ success: true }), { 
@@ -1165,26 +2142,55 @@ async function handleUpdateUser(request, env) {
 
 async function handleGetSubscription(request, env, userAuth) {
   const userId = userAuth.userId;
-  
+
   try {
     let subscription = null;
-    
+    let tierFeatures = TIER_FEATURES.free;
+
     if (env.NEON_DATABASE_URL) {
       subscription = await queryNeon(env,
-        `SELECT us.*, st.name as tier_name, st.price as tier_price 
-         FROM user_subscriptions us 
-         LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key 
+        `SELECT us.*, st.name as tier_name, st.price as tier_price
+         FROM user_subscriptions us
+         LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key
          WHERE us.user_id = $1 AND us.status = 'active'`,
         [userId]
       );
+      if (subscription && subscription.length > 0) {
+        const tierId = subscription[0].tier_id || 'free';
+        tierFeatures = getTierFeatures(tierId);
+      }
     }
-    
-    return new Response(JSON.stringify(subscription || null), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+
+    const response = subscription && subscription.length > 0
+      ? {
+          ...subscription[0],
+          features: tierFeatures,
+          maxChatbots: tierFeatures.maxChatbots,
+          maxConversations: tierFeatures.maxConversations,
+          channels: tierFeatures.channels,
+          featuresList: tierFeatures.features,
+          exportEnabled: tierFeatures.exportEnabled,
+          apiAccess: tierFeatures.apiAccess,
+        }
+      : {
+          tier_id: 'free',
+          tier_name: 'Free',
+          status: 'active',
+          features: TIER_FEATURES.free,
+          maxChatbots: TIER_FEATURES.free.maxChatbots,
+          maxConversations: TIER_FEATURES.free.maxConversations,
+          channels: TIER_FEATURES.free.channels,
+          featuresList: TIER_FEATURES.free.features,
+          exportEnabled: false,
+          apiAccess: false,
+        };
+
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
@@ -1212,12 +2218,48 @@ async function handleCreateSubscription(request, env, userAuth) {
       );
     }
     
-    return new Response(JSON.stringify({ success: true, expiresAt: expiresAt.toISOString() }), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ success: true, expiresAt: expiresAt.toISOString() }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleGetTierInfo(request, env, userAuth) {
+  try {
+    const userId = userAuth.userId;
+    let tierId = 'free';
+    let features = TIER_FEATURES.free;
+
+    if (env.NEON_DATABASE_URL) {
+      const sub = await queryNeon(env,
+        'SELECT tier_id FROM user_subscriptions WHERE user_id = $1 AND status = $2',
+        [userId, 'active']
+      );
+      if (sub && sub.length > 0) {
+        tierId = sub[0].tier_id || 'free';
+        features = getTierFeatures(tierId);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      tier: tierId,
+      features,
+      maxChatbots: features.maxChatbots,
+      maxConversations: features.maxConversations,
+      channels: features.channels,
+      canExport: features.exportEnabled,
+      canUseAPI: features.apiAccess,
+      availableAddOns: features.addOns,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
@@ -1230,28 +2272,69 @@ async function handleCreateChatbot(request, env, userAuth) {
   try {
     const { name, industry, description } = await request.json();
     const userId = userAuth.userId;
-    
+
     if (!name || name.length < 2) {
-      return new Response(JSON.stringify({ error: 'Name must be at least 2 characters' }), { 
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      return new Response(JSON.stringify({ error: 'Name must be at least 2 characters' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
+    // Get user's tier and check chatbot limit
+    let userTier = 'free';
+    if (env.NEON_DATABASE_URL) {
+      const sub = await queryNeon(env,
+        "SELECT tier_id FROM user_subscriptions WHERE user_id = $1 AND status = 'active'",
+        [userId]
+      );
+      if (sub && sub.length > 0) {
+        userTier = sub[0].tier_id || 'free';
+      }
+    }
+
+    const maxChatbots = getMaxChatbots(userTier);
+
+    // Count existing chatbots
+    if (env.NEON_DATABASE_URL) {
+      const existingBots = await queryNeon(env,
+        "SELECT COUNT(*) as count FROM chatbots WHERE user_id = $1",
+        [userId]
+      );
+      const currentCount = existingBots?.[0]?.count || 0;
+
+      if (maxChatbots !== -1 && currentCount >= maxChatbots) {
+        return new Response(JSON.stringify({
+          error: `Chatbot limit reached. Your ${userTier} plan allows ${maxChatbots} chatbot(s).`,
+          currentTier: userTier,
+          maxChatbots,
+          currentCount,
+          upgradeRequired: true
+        }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     const botId = crypto.randomUUID();
-    
+
     if (env.NEON_DATABASE_URL) {
       await queryNeon(env,
-        "INSERT INTO chatbots (id, user_id, name, industry, description, is_published, created_at) VALUES ($1, $2, $3, $4, $5, false, NOW())",
+        "INSERT INTO chatbots (id, user_id, name, industry, description, is_published, is_approved, created_at) VALUES ($1, $2, $3, $4, $5, false, true, NOW())",
         [botId, userId, name, industry || '', description || '']
       );
     }
-    
-    return new Response(JSON.stringify({ id: botId, name, industry }), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+
+    return new Response(JSON.stringify({
+      id: botId,
+      name,
+      industry,
+      tier: userTier,
+      maxChatbots
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
@@ -1313,12 +2396,274 @@ async function handleDeleteChatbot(request, env, userAuth) {
       await queryNeon(env, "DELETE FROM chatbots WHERE id = $1", [id]);
     }
     
-    return new Response(JSON.stringify({ success: true }), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// ============================================
+// Export Functions (Admin Only)
+// ============================================
+
+function convertToCSV(data, headers) {
+  const csvRows = [];
+  csvRows.push(headers.join(','));
+  for (const row of data) {
+    const values = headers.map(header => {
+      const value = row[header] ?? '';
+      const escaped = String(value).replace(/"/g, '""');
+      return `"${escaped}"`;
+    });
+    csvRows.push(values.join(','));
+  }
+  return csvRows.join('\n');
+}
+
+async function handleExportChatbots(request, env, adminAuth) {
+  try {
+    const url = new URL(request.url);
+    const format = url.searchParams.get('format') || 'json';
+
+    let chatbots = [];
+    if (env.NEON_DATABASE_URL) {
+      chatbots = await queryNeon(env,
+        `SELECT c.*, u.email as owner_email, u.display_name as owner_name, st.name as tier_name
+         FROM chatbots c
+         LEFT JOIN profiles u ON c.user_id = u.id
+         LEFT JOIN user_subscriptions us ON u.id = us.user_id AND us.status = 'active'
+         LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key
+         ORDER BY c.created_at DESC`
+      );
+    }
+
+    if (format === 'csv') {
+      const headers = ['id', 'name', 'industry', 'is_published', 'is_approved', 'created_at', 'owner_email', 'tier_name'];
+      const csv = convertToCSV(chatbots, headers);
+      return new Response(csv, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="chatbots_${Date.now()}.csv"`
+        }
+      });
+    }
+
+    return new Response(JSON.stringify({ chatbots }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Export failed' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleExportUsers(request, env, adminAuth) {
+  try {
+    const url = new URL(request.url);
+    const format = url.searchParams.get('format') || 'json';
+
+    let users = [];
+    if (env.NEON_DATABASE_URL) {
+      users = await queryNeon(env,
+        `SELECT p.id, p.email, p.display_name, p.role, p.is_active, p.created_at,
+                us.tier_id, st.name as tier_name, st.price as tier_price,
+                (SELECT COUNT(*)::int FROM chatbots WHERE user_id = p.id) as chatbot_count
+         FROM profiles p
+         LEFT JOIN user_subscriptions us ON p.id = us.user_id AND us.status = 'active'
+         LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key
+         ORDER BY p.created_at DESC`
+      );
+    }
+
+    if (format === 'csv') {
+      const headers = ['id', 'email', 'display_name', 'role', 'is_active', 'created_at', 'tier_name', 'chatbot_count'];
+      const csv = convertToCSV(users, headers);
+      return new Response(csv, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="users_${Date.now()}.csv"`
+        }
+      });
+    }
+
+    return new Response(JSON.stringify({ users }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Export failed' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleExportPayments(request, env, adminAuth) {
+  try {
+    const url = new URL(request.url);
+    const format = url.searchParams.get('format') || 'json';
+
+    let payments = [];
+    if (env.NEON_DATABASE_URL) {
+      payments = await queryNeon(env,
+        `SELECT p.*, u.email as user_email, u.display_name as user_name
+         FROM payments p
+         LEFT JOIN profiles u ON p.user_id = u.id
+         ORDER BY p.created_at DESC`
+      );
+    }
+
+    if (format === 'csv') {
+      const headers = ['id', 'user_email', 'user_name', 'amount', 'plan', 'status', 'payment_method', 'utr_number', 'transaction_id', 'created_at'];
+      const csv = convertToCSV(payments, headers);
+      return new Response(csv, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="payments_${Date.now()}.csv"`
+        }
+      });
+    }
+
+    return new Response(JSON.stringify({ payments }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Export failed' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// ============================================
+// Chatbot Approval (Admin)
+// ============================================
+
+async function handleGetAllChatbotsAdmin(request, env, adminAuth) {
+  try {
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status'); // pending, approved, rejected, all
+
+    let query = `SELECT c.*, u.email as owner_email, u.display_name as owner_name,
+                 us.tier_id, st.name as tier_name
+                 FROM chatbots c
+                 LEFT JOIN profiles u ON c.user_id = u.id
+                 LEFT JOIN user_subscriptions us ON u.id = us.user_id AND us.status = 'active'
+                 LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key`;
+
+    const params = [];
+    if (status && status !== 'all') {
+      if (status === 'pending') {
+        query += ' WHERE c.is_approved = false';
+      } else if (status === 'approved') {
+        query += ' WHERE c.is_approved = true';
+      }
+    }
+    query += ' ORDER BY c.created_at DESC LIMIT 100';
+
+    let chatbots = [];
+    if (env.NEON_DATABASE_URL) {
+      chatbots = await queryNeon(env, query, params);
+    }
+
+    return new Response(JSON.stringify(chatbots), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleApproveChatbot(request, env, adminAuth) {
+  try {
+    const { chatbotId } = await request.json();
+
+    if (!chatbotId) {
+      return new Response(JSON.stringify({ error: 'Chatbot ID required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isValidUUID(chatbotId)) {
+      return new Response(JSON.stringify({ error: 'Invalid chatbot ID format' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (env.NEON_DATABASE_URL) {
+      const existing = await queryNeon(env, 'SELECT id, is_approved FROM chatbots WHERE id = $1', [chatbotId]);
+      if (!existing || existing.length === 0) {
+        return new Response(JSON.stringify({ error: 'Chatbot not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (existing[0].is_approved) {
+        return new Response(JSON.stringify({ error: 'Chatbot already approved' }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      await queryNeon(env,
+        'UPDATE chatbots SET is_approved = true, is_published = true, updated_at = NOW() WHERE id = $1',
+        [chatbotId]
+      );
+      await logActivity(env, adminAuth.userId, 'APPROVE_CHATBOT', 'chatbot', chatbotId, {});
+    }
+
+    return new Response(JSON.stringify({ success: true, message: 'Chatbot approved and published' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleRejectChatbot(request, env, adminAuth) {
+  try {
+    const { chatbotId, reason } = await request.json();
+
+    if (!chatbotId) {
+      return new Response(JSON.stringify({ error: 'Chatbot ID required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!isValidUUID(chatbotId)) {
+      return new Response(JSON.stringify({ error: 'Invalid chatbot ID format' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (env.NEON_DATABASE_URL) {
+      const existing = await queryNeon(env, 'SELECT id, is_approved FROM chatbots WHERE id = $1', [chatbotId]);
+      if (!existing || existing.length === 0) {
+        return new Response(JSON.stringify({ error: 'Chatbot not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      await queryNeon(env,
+        'UPDATE chatbots SET is_approved = false, is_published = false, updated_at = NOW() WHERE id = $1',
+        [chatbotId]
+      );
+      await logActivity(env, adminAuth.userId, 'REJECT_CHATBOT', 'chatbot', chatbotId, { reason });
+    }
+
+    return new Response(JSON.stringify({ success: true, message: 'Chatbot rejected' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }

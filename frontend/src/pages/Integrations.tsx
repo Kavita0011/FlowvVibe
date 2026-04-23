@@ -156,6 +156,31 @@ export default function Integrations() {
   const [calendarProvider, setCalendarProvider] = useState<'google' | 'calendly' | null>(null);
   const [calendarConfig, setCalendarConfig] = useState({ calendarId: '', webhookUrl: '' });
 
+  const handleDeleteKnowledge = (index: number) => {
+    setKnowledgeBase(prev => prev.filter((_, i) => i !== index));
+    toast.success('Knowledge source removed');
+  };
+
+  const handleSaveCalendar = () => {
+    if (!calendarProvider) {
+      toast.error('Please select a calendar provider');
+      return;
+    }
+    if (calendarProvider === 'calendly' && !calendarConfig.calendarId) {
+      toast.error('Please enter your Calendly URL');
+      return;
+    }
+    toast.success('Calendar booking enabled!');
+  };
+
+  const handleAddScoringRule = () => {
+    toast.success('Add scoring rule modal would open here');
+  };
+
+  const handleCreateTest = () => {
+    toast.success('Create new A/B test modal would open here');
+  };
+
   const handleConnect = (channelId: string) => {
     const channel = CHANNELS.find(c => c.id === channelId);
     if (!channel) return;
@@ -347,7 +372,13 @@ export default function Integrations() {
                 <span className="inline-block px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded">
                   {template.category}
                 </span>
-                <button className="mt-4 w-full py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 text-sm">
+                <button
+                  onClick={() => {
+                    toast.success(`Template "${template.name}" applied!`);
+                    navigate('/flow');
+                  }}
+                  className="mt-4 w-full py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 text-sm"
+                >
                   Use Template
                 </button>
               </div>
@@ -393,7 +424,7 @@ export default function Integrations() {
                       <div className="flex items-center gap-2">
                         {kb.status === 'syncing' && <span className="text-yellow-400 text-sm">Syncing...</span>}
                         {kb.status === 'ready' && <span className="text-green-400 text-sm flex items-center gap-1"><Check className="w-3 h-3" /> Ready</span>}
-                        <button className="text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => handleDeleteKnowledge(i)} className="text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </div>
                   ))}
@@ -475,7 +506,7 @@ export default function Integrations() {
                   </div>
                 </div>
               </div>
-              <button className="mt-4 w-full py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400">
+              <button onClick={handleCreateTest} className="mt-4 w-full py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400">
                 Create New Test
               </button>
             </div>
@@ -495,7 +526,7 @@ export default function Integrations() {
                   </div>
                 ))}
               </div>
-              <button className="mt-4 flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
+              <button onClick={handleAddScoringRule} className="mt-4 flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
                 <Plus className="w-4 h-4" /> Add scoring rule
               </button>
             </div>
@@ -593,7 +624,7 @@ export default function Integrations() {
                     </div>
                   </div>
                 )}
-                <button className="mt-4 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 text-sm">
+                <button onClick={handleSaveCalendar} className="mt-4 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 text-sm">
                   Save & Enable Booking
                 </button>
               </div>

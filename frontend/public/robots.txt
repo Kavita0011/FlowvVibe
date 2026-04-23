@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Directories
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /flow
+Disallow: /prd
+Disallow: /embed
+Disallow: /credentials
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: https://flowvibe.com/sitemap.xml

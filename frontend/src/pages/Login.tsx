@@ -69,116 +69,6 @@ export default function Login() {
       setLoading(false);
     }
   };
-    
-    if (!validateEmail(email)) {
-      setLoginError('Invalid email format');
-      return;
-    }
-
-    const sanitizedEmail = sanitizeInput(email);
-    setLoading(true);
-
-    // 1. ADMIN LOGIN (devappkavita@gmail.com)
-    if (sanitizedEmail === ADMIN_EMAIL) {
-      if (password === ADMIN_PASSWORD) {
-        const { token, expires } = createSessionToken('admin_001', 24);
-        const adminUser: User = { 
-          id: 'admin_001', 
-          email: ADMIN_EMAIL, 
-          displayName: 'Admin', 
-          role: 'admin', 
-          subscription: { tier: 'enterprise', status: 'active', startDate: new Date() }, 
-          createdAt: new Date(), 
-          isActive: true 
-        } as User;
-        
-        localStorage.setItem('session_token', token);
-        localStorage.setItem('session_expires', expires.toString());
-        localStorage.setItem('user', JSON.stringify(adminUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        
-        setUser(adminUser);
-        setIsAuthenticated(true);
-        navigate('/admin');
-        return;
-      } else {
-        setLoginError('Incorrect admin password');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // 2. DEMO USER LOGIN
-    const isDemoUser = DEMO_EMAILS.includes(sanitizedEmail.toLowerCase()) && 
-                       DEMO_PASSWORDS.includes(password);
-    
-    if (isDemoUser) {
-      const demoUser: User = { 
-        id: 'demo_001', 
-        email: sanitizedEmail, 
-        displayName: 'Demo User', 
-        role: 'user', 
-        subscription: { tier: 'pro', status: 'active', startDate: new Date() }, 
-        createdAt: new Date(), 
-        isActive: true 
-      } as User;
-      
-      localStorage.setItem('user', JSON.stringify(demoUser));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(demoUser);
-      setIsAuthenticated(true);
-      navigate('/dashboard');
-      return;
-    }
-
-    // 3. REGULAR USER - Try Supabase Auth
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: sanitizedEmail,
-          password,
-        });
-
-        if (error) {
-          if (error.message.includes('Email not confirmed') || error.message.includes('verify')) {
-            setLoginError('Please verify your email first. Check your inbox.');
-          } else {
-            setLoginError('Invalid email or password');
-          }
-          setLoading(false);
-          return;
-        }
-
-        if (data.user) {
-          const loggedInUser: User = {
-            id: data.user.id,
-            email: data.user.email || sanitizedEmail,
-            displayName: data.user.user_metadata?.display_name || sanitizedEmail.split('@')[0],
-            role: 'user',
-            isActive: true,
-            createdAt: new Date(),
-            subscription: { tier: 'free', status: 'active', startDate: new Date() }
-          };
-          
-          localStorage.setItem('user', JSON.stringify(loggedInUser));
-          localStorage.setItem('isAuthenticated', 'true');
-          setUser(loggedInUser);
-          setIsAuthenticated(true);
-          navigate('/dashboard');
-          return;
-        }
-      } catch (err) {
-        console.error('Supabase error:', err);
-        setLoginError('Authentication failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // No auth method available
-    setLoginError('Please login with admin email or register a new account');
-    setLoading(false);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -251,9 +141,14 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center text-slate-400 mt-6">
-            Don't have an account? <button onClick={() => navigate('/register')} className="text-cyan-400 hover:text-cyan-300">Sign up</button>
-          </p>
+          <div className="flex justify-between items-center mt-6">
+            <button onClick={() => navigate('/register')} className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">
+              Create account
+            </button>
+            <button onClick={() => navigate('/forgot-password')} className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">
+              Forgot password?
+            </button>
+          </div>
         </div>
       </div>
     </div>

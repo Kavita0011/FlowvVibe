@@ -71,17 +71,25 @@ export const auth = {
     const sanitizedPassword = sanitizeInput(password);
     return apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword }) });
   },
-  
+
   register: (email, password, displayName) => {
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedPassword = sanitizeInput(password);
     const sanitizedName = sanitizeInput(displayName);
     return apiRequest('/auth/register', { method: 'POST', body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword, displayName: sanitizedName }) });
   },
-  
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+  },
+
+  forgotPassword: (email) => {
+    return apiRequest('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+  },
+
+  resetPassword: (email, token, newPassword) => {
+    return apiRequest('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, token, newPassword }) });
   },
 };
 
@@ -94,19 +102,23 @@ export const pricing = {
 // Chatbots API
 export const chatbots = {
   getAll: () => apiRequest('/chatbots'),
-  
-  create: (data) => apiRequestWithBody('/chatbots', data),
-  
-  update: (id, data) => apiRequestWithBody(`/chatbots/${id}`, data),
-  
-  delete: (id) => apiRequest(`/chatbots/${id}`, { method: 'DELETE' }),
+
+  create: (data) => apiRequest('/chatbots', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (data) => apiRequest('/chatbots', { method: 'PUT', body: JSON.stringify(data) }),
+
+  delete: (id) => apiRequest('/chatbots', { method: 'DELETE', body: JSON.stringify({ id }) }),
 };
 
 // Payments API
 export const payments = {
-  create: (data) => apiRequestWithBody('/payments', data),
-  
+  create: (data) => apiRequest('/payments', { method: 'POST', body: JSON.stringify(data) }),
+
   getAll: () => apiRequest('/payments'),
+
+  getMy: () => apiRequest('/payments'),
+
+  update: (data) => apiRequest('/payments/update', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // User API
@@ -121,18 +133,64 @@ export const subscriptions = {
   create: (data) => apiRequestWithBody('/subscription', data),
 };
 
+// Tier Info API (for channel access check)
+export const tier = {
+  getInfo: () => apiRequest('/tier-info'),
+};
+
 // Health check
 export const health = () => apiRequest('/health');
 
+// PRD Download (free, no auth)
+export const prd = {
+  getInfo: () => apiRequest('/prd/info'),
+  download: async () => {
+    const response = await fetch(`${API_BASE}/prd`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'FlowvVibe_PRD.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+};
+
 // Admin API (for admin pages)
 export const admin = {
-  getPayments: () => apiRequest('/admin/payments'),
-  approvePayment: (data) => apiRequestWithBody('/admin/payments/approve', data),
-  rejectPayment: (data) => apiRequestWithBody('/admin/payments/reject', data),
+  // Payments
+  getPayments: (status) => apiRequest(status ? `/admin/payments?status=${status}` : '/admin/payments'),
+  updatePayment: (data) => apiRequest('/admin/payments/update', { method: 'POST', body: JSON.stringify(data) }),
+  approvePayment: (data) => apiRequest('/admin/payments/approve', { method: 'POST', body: JSON.stringify(data) }),
+  rejectPayment: (data) => apiRequest('/admin/payments/reject', { method: 'POST', body: JSON.stringify(data) }),
+  setPaymentProcessing: (data) => apiRequest('/admin/payments/processing', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Users
   getUsers: () => apiRequest('/admin/users'),
+  updateUser: (data) => apiRequest('/admin/users/update', { method: 'POST', body: JSON.stringify(data) }),
+  deleteUser: (userId) => apiRequest('/admin/users/delete', { method: 'POST', body: JSON.stringify({ userId }) }),
+  impersonateUser: (userId) => apiRequest('/admin/users/impersonate', { method: 'POST', body: JSON.stringify({ userId }) }),
+
+  // Chatbots
+  getChatbots: (status) => apiRequest(status ? `/admin/chatbots?status=${status}` : '/admin/chatbots'),
+  approveChatbot: (data) => apiRequest('/admin/chatbots/approve', { method: 'POST', body: JSON.stringify(data) }),
+  rejectChatbot: (data) => apiRequest('/admin/chatbots/reject', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Settings
   getSettings: () => apiRequest('/admin/settings'),
-  saveSettings: (data) => apiRequestWithBody('/admin/settings', data),
-  savePricingPlan: (data) => apiRequestWithBody('/admin/pricing', data),
+  saveSettings: (data) => apiRequest('/admin/settings', { method: 'POST', body: JSON.stringify(data) }),
+  savePricingPlan: (data) => apiRequest('/admin/pricing', { method: 'POST', body: JSON.stringify(data) }),
+  updateSubscription: (data) => apiRequest('/admin/subscriptions/update', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Analytics & Exports
+  getAnalytics: () => apiRequest('/admin/analytics'),
+  getRevenueStats: () => apiRequest('/admin/stats/revenue'),
+  getUserStats: () => apiRequest('/admin/stats/users'),
+  exportChatbots: (format = 'json') => apiRequest(`/admin/export/chatbots?format=${format}`),
+  exportUsers: (format = 'json') => apiRequest(`/admin/export/users?format=${format}`),
+  exportPayments: (format = 'json') => apiRequest(`/admin/export/payments?format=${format}`),
 };
 
 export default apiRequest;
