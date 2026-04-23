@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import type { User } from '../types';
 
 const ADMIN_EMAIL = 'devappkavita@gmail.com';
-const ADMIN_PASSWORD = 'kavitabisht2598@sbi';
+const ADMIN_PASSWORD = 'admin@flowvibe2026';
 const DEMO_EMAILS = ['demo@demo.com', 'demo@flowvibe.ai'];
 const DEMO_PASSWORDS = ['demo', 'demo123'];
 
@@ -213,7 +213,7 @@ export default function Login() {
           <div className="mt-6 p-4 bg-slate-700/30 rounded-xl">
             <p className="text-slate-400 text-sm mb-2">Demo Accounts:</p>
             <div className="text-xs text-slate-500 space-y-1">
-              <p><span className="text-cyan-400">Admin:</span> devappkavita@gmail.com / kavitabisht2598@sbi</p>
+              <p><span className="text-cyan-400">Admin:</span> devappkavita@gmail.com / admin@flowvibe2026</p>
               <p><span className="text-cyan-400">Demo:</span> demo@demo.com / demo</p>
             </div>
           </div>

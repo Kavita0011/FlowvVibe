@@ -270,7 +270,7 @@ async function handleLogin(request, env) {
 
     // Check for admin credentials
     const adminEmail = env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com';
-    const adminPassword = env.VITE_ADMIN_PASSWORD;
+    const adminPassword = env.VITE_ADMIN_PASSWORD || 'admin@flowvibe2026';
     
     // Admin login
     if (email === adminEmail && adminPassword) {
