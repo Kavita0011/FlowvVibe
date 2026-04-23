@@ -25,6 +25,7 @@ const ClientCredentials = lazy(() => import('./pages/ClientCredentials'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const Terms = lazy(() => import('./pages/Terms'));
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy'));
+const Invoice = lazy(() => import('./pages/Invoice'));
 
 function App() {
   const { isAuthenticated, isAdmin, user } = useChatbotStore();
@@ -74,6 +75,7 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/cookies" element={<CookiePolicy />} />
+        <Route path="/invoice" element={<Invoice />} />
       </Routes>
       </Suspense>
     </Router>
