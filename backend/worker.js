@@ -29,6 +29,16 @@ const staticAssetHeaders = {
   'Cache-Control': 'public, max-age=31536000, immutable',
 };
 
+// Password verification helper
+async function verifyPassword(password, storedHash) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'flowvibe_salt_2024');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex === storedHash;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -258,10 +268,33 @@ async function handleLogin(request, env) {
       return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Check for admin credentials
+    const adminEmail = env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com';
+    const adminPassword = env.VITE_ADMIN_PASSWORD;
+    
+    // Admin login
+    if (email === adminEmail && adminPassword) {
+      if (password === adminPassword) {
+        return new Response(JSON.stringify({
+          user: {
+            id: 'admin_001',
+            email: adminEmail,
+            displayName: 'Admin',
+            role: 'admin',
+            isActive: true,
+            emailVerified: true
+          },
+          token: `admin_token_${Date.now()}`,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } else {
+        return new Response(JSON.stringify({ error: 'Invalid admin credentials' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     // Try to find user in database
     if (env.NEON_DATABASE_URL) {
       try {
-        const users = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified FROM profiles WHERE email = $1", [email]);
+        const users = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM profiles WHERE email = $1", [email]);
         
         if (users && users.length > 0) {
           const user = users[0];
@@ -275,7 +308,14 @@ async function handleLogin(request, env) {
             }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           
-          // In production, verify password hash here
+          // Verify password if hash exists
+          if (user.password_hash) {
+            const passwordMatch = await verifyPassword(password, user.password_hash);
+            if (!passwordMatch) {
+              return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+          }
+          
           return new Response(JSON.stringify({
             user: {
               id: user.id,

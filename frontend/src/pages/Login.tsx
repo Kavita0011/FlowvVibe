@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, AlertTriangle, Shield } from 'lucide-react';
+import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, AlertTriangle, Shield, Loader2 } from 'lucide-react';
 import { checkRateLimit, createSessionToken, validateEmail, sanitizeInput } from '../lib/security';
+import { supabase } from '../lib/supabase';
 import type { User } from '../types';
+
+const ADMIN_EMAIL = 'devappkavita@gmail.com';
+const ADMIN_PASSWORD = 'kavitabisht2598@sbi';
+const DEMO_EMAILS = ['demo@demo.com', 'demo@flowvibe.ai'];
+const DEMO_PASSWORDS = ['demo', 'demo123'];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -13,58 +19,31 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const [lockoutEnd, setLockoutEnd] = useState(0);
-
-  // Rate limiting check
-  useEffect(() => {
-    const identifier = `login_${window.location.ip || 'unknown'}`;
-    const { allowed, resetAt } = checkRateLimit(identifier, 5, 15);
-    if (!allowed) {
-      setLocked(true);
-      setLockoutEnd(resetAt);
-    }
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     
-    // Check rate limit
-    const identifier = `login_${window.location.ip || 'unknown'}`;
-    const { allowed, resetAt } = checkRateLimit(identifier, 5, 15);
-    if (!allowed) {
-      setLocked(true);
-      setLockoutEnd(resetAt);
-      setLoginError(`Too many attempts. Try again in ${Math.ceil((resetAt - Date.now()) / 60000)} minutes`);
-      return;
-    }
-    
-    // Validate inputs
-    const sanitizedEmail = sanitizeInput(email);
-    if (!sanitizedEmail || !password) {
+    if (!email || !password) {
       setLoginError('Please enter both email and password');
       return;
     }
     
-    if (!validateEmail(sanitizedEmail)) {
+    if (!validateEmail(email)) {
       setLoginError('Invalid email format');
       return;
     }
 
-    // Admin login - credentials from env vars (set in Cloudflare)
-    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-    const adminPasswordHash = import.meta.env.VITE_ADMIN_PASSWORD_HASH;
-    
-    if (adminEmail && adminPasswordHash && sanitizedEmail === adminEmail) {
-      const inputHash = btoa(password + 'flowvibe_salt_2024');
-      if (inputHash === adminPasswordHash) {
-        // Create session token
+    const sanitizedEmail = sanitizeInput(email);
+    setLoading(true);
+
+    // 1. ADMIN LOGIN (devappkavita@gmail.com)
+    if (sanitizedEmail === ADMIN_EMAIL) {
+      if (password === ADMIN_PASSWORD) {
         const { token, expires } = createSessionToken('admin_001', 24);
-        
         const adminUser: User = { 
           id: 'admin_001', 
-          email: adminEmail, 
+          email: ADMIN_EMAIL, 
           displayName: 'Admin', 
           role: 'admin', 
           subscription: { tier: 'enterprise', status: 'active', startDate: new Date() }, 
@@ -72,52 +51,37 @@ export default function Login() {
           isActive: true 
         } as User;
         
-        // Secure storage
         localStorage.setItem('session_token', token);
         localStorage.setItem('session_expires', expires.toString());
         localStorage.setItem('user', JSON.stringify(adminUser));
         localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('last_login', Date.now().toString());
         
         setUser(adminUser);
         setIsAuthenticated(true);
         navigate('/admin');
         return;
+      } else {
+        setLoginError('Incorrect admin password');
+        setLoading(false);
+        return;
       }
     }
 
-    // Demo user
-    if (sanitizedEmail === 'demo@demo.com' && password === 'demo') {
-      const { token, expires } = createSessionToken('demo_001', 24);
-      
-      const testUser: User = { 
-        id: 'demo_001', 
-        email: 'demo@demo.com', 
-        displayName: 'Demo User', 
-        role: 'user', 
-        subscription: { tier: 'pro', status: 'active', startDate: new Date() }, 
-        createdAt: new Date(), 
-        isActive: true 
-      } as User;
-      localStorage.setItem('user', JSON.stringify(testUser));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(testUser);
-      setIsAuthenticated(true);
-      navigate('/dashboard');
-      return;
-    }
-
-    // Demo user login
-    if (email === 'demo@flowvibe.ai' && password === 'demo123') {
+    // 2. DEMO USER LOGIN
+    const isDemoUser = DEMO_EMAILS.includes(sanitizedEmail.toLowerCase()) && 
+                       DEMO_PASSWORDS.includes(password);
+    
+    if (isDemoUser) {
       const demoUser: User = { 
         id: 'demo_001', 
-        email: 'demo@flowvibe.ai', 
+        email: sanitizedEmail, 
         displayName: 'Demo User', 
         role: 'user', 
         subscription: { tier: 'pro', status: 'active', startDate: new Date() }, 
         createdAt: new Date(), 
         isActive: true 
       } as User;
+      
       localStorage.setItem('user', JSON.stringify(demoUser));
       localStorage.setItem('isAuthenticated', 'true');
       setUser(demoUser);
@@ -126,92 +90,53 @@ export default function Login() {
       return;
     }
 
-    setLoading(true);
-    
-    try {
-      // Check if Supabase is configured
-      if (!supabase) {
-        setLoginError('Database not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
-        setLoading(false);
-        return;
-      }
-      
-      // Try Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    // 3. REGULAR USER - Try Supabase Auth
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: sanitizedEmail,
+          password,
+        });
 
-      if (error) {
-        // Check if it's an email not verified error from Supabase
-        if (error.message.includes('Email not confirmed') || error.message.includes('verify your email')) {
-          setLoginError('Please verify your email first. Check your inbox for the verification link.');
+        if (error) {
+          if (error.message.includes('Email not confirmed') || error.message.includes('verify')) {
+            setLoginError('Please verify your email first. Check your inbox.');
+          } else {
+            setLoginError('Invalid email or password');
+          }
           setLoading(false);
           return;
         }
-        
-        console.log('Supabase login failed, trying demo mode');
-        // Demo mode fallback for any email/password
-        const demoUser: User = { 
-          id: `user_${Date.now()}`, 
-          email, 
-          displayName: email.split('@')[0], 
-          role: 'user', 
-          subscription: { tier: 'free', status: 'active', startDate: new Date() }, 
-          createdAt: new Date(), 
-          isActive: true 
-        } as User;
-        localStorage.setItem('user', JSON.stringify(demoUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        setUser(demoUser);
-        setIsAuthenticated(true);
-        navigate('/dashboard');
-        return;
-      }
 
-      if (data.user) {
-        const loggedInUser: User = {
-          id: data.user.id,
-          email: data.user.email || email,
-          displayName: data.user.user_metadata?.display_name || email.split('@')[0],
-          role: 'user',
-          isActive: true,
-          createdAt: new Date(),
-          subscription: { tier: 'free', status: 'active', startDate: new Date(), expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
-        };
-        
-        localStorage.setItem('user', JSON.stringify(loggedInUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        setUser(loggedInUser);
-        setIsAuthenticated(true);
-        navigate('/dashboard');
-      }
-    } catch (err: any) {
-      console.error('Login error:', err);
-      // Check if it's a verification required error from API
-      if (err?.needsVerification || (err?.message && err.message.includes('verify'))) {
-        setLoginError('Please verify your email first. Check your inbox for the verification link.');
+        if (data.user) {
+          const loggedInUser: User = {
+            id: data.user.id,
+            email: data.user.email || sanitizedEmail,
+            displayName: data.user.user_metadata?.display_name || sanitizedEmail.split('@')[0],
+            role: 'user',
+            isActive: true,
+            createdAt: new Date(),
+            subscription: { tier: 'free', status: 'active', startDate: new Date() }
+          };
+          
+          localStorage.setItem('user', JSON.stringify(loggedInUser));
+          localStorage.setItem('isAuthenticated', 'true');
+          setUser(loggedInUser);
+          setIsAuthenticated(true);
+          navigate('/dashboard');
+          return;
+        }
+      } catch (err) {
+        console.error('Supabase error:', err);
+        setLoginError('Authentication failed. Please try again.');
         setLoading(false);
         return;
       }
-      // Fallback to demo mode
-      const demoUser: User = { 
-        id: `user_${Date.now()}`, 
-        email, 
-        displayName: email.split('@')[0], 
-        role: 'user', 
-        subscription: { tier: 'free', status: 'active', startDate: new Date() }, 
-        createdAt: new Date(), 
-        isActive: true 
-      } as User;
-      localStorage.setItem('user', JSON.stringify(demoUser));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(demoUser);
-      setIsAuthenticated(true);
-      navigate('/dashboard');
-    } finally {
-      setLoading(false);
     }
+
+    // No auth method available
+    setLoginError('Please login with admin email or register a new account');
+    setLoading(false);
   };
 
   return (
@@ -222,56 +147,78 @@ export default function Login() {
         </button>
 
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8">
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <Bot className="w-7 h-7 text-white" />
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Bot className="w-8 h-8 text-white" />
             </div>
-            <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">FlowvVibe</span>
+            <h1 className="text-3xl font-bold text-white">Welcome Back</h1>
+            <p className="text-slate-400 mt-2">Login to your FlowvVibe account</p>
           </div>
 
-          <h2 className="text-2xl font-bold text-white text-center mb-2">Welcome Back</h2>
-          <p className="text-slate-400 text-center mb-8">Login to your account</p>
-
-          {locked && lockoutEnd > Date.now() && (
-            <div className="bg-orange-500/10 border border-orange-500/50 text-orange-400 px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              Account temporarily locked. Try again in {Math.ceil((lockoutEnd - Date.now()) / 60000)} minutes.
-            </div>
-          )}
-          
-          {loginError && !locked && (
+          {loginError && (
             <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
-              <Shield className="w-5 h-5" />
+              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
               {loginError}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-slate-400 mb-2">Email</label>
+              <label className="block text-slate-400 mb-2 text-sm">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  required
+                />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-2">Password</label>
+              <label className="block text-slate-400 mb-2 text-sm">Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full pl-12 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-12 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-semibold rounded-xl transition-all disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold rounded-xl hover:from-cyan-400 hover:to-purple-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
 
-          <p className="text-slate-400 text-center mt-6">
+          <div className="mt-6 p-4 bg-slate-700/30 rounded-xl">
+            <p className="text-slate-400 text-sm mb-2">Demo Accounts:</p>
+            <div className="text-xs text-slate-500 space-y-1">
+              <p><span className="text-cyan-400">Admin:</span> devappkavita@gmail.com / kavitabisht2598@sbi</p>
+              <p><span className="text-cyan-400">Demo:</span> demo@demo.com / demo</p>
+            </div>
+          </div>
+
+          <p className="text-center text-slate-400 mt-6">
             Don't have an account? <button onClick={() => navigate('/register')} className="text-cyan-400 hover:text-cyan-300">Sign up</button>
           </p>
         </div>
