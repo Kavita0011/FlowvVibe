@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
+import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, User, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUser, setIsAuthenticated } = useChatbotStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,6 +15,70 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [registerError, setRegisterError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [verificationError, setVerificationError] = useState('');
+
+  // Check for verification token in URL
+  useEffect(() => {
+    const token = searchParams.get('token');
+    const emailParam = searchParams.get('email');
+    
+    if (token && emailParam) {
+      verifyEmail(token, emailParam);
+    }
+  }, [searchParams]);
+
+  const verifyEmail = async (token: string, email: string) => {
+    setVerifying(true);
+    setVerificationError('');
+    
+    try {
+      // Call API to verify
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      if (API_URL) {
+        const response = await fetch(`${API_URL}/api/auth/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, email })
+        });
+        
+        if (response.ok) {
+          setVerified(true);
+          // Auto-login after verification
+          const userData = {
+            id: `verified_${Date.now()}`,
+            email,
+            displayName: email.split('@')[0],
+            role: 'user',
+            isActive: true,
+            emailVerified: true,
+            createdAt: new Date(),
+            subscription: { tier: 'free', status: 'active', startDate: new Date() }
+          };
+          
+          localStorage.setItem('user', JSON.stringify(userData));
+          localStorage.setItem('isAuthenticated', 'true');
+          setUser(userData as any);
+          setIsAuthenticated(true);
+          
+          setTimeout(() => navigate('/dashboard'), 2000);
+        } else {
+          setVerificationError('Invalid or expired verification link');
+        }
+      } else {
+        // Demo mode - just verify locally
+        setVerified(true);
+        setTimeout(() => navigate('/login'), 2000);
+      }
+    } catch (err) {
+      setVerificationError('Verification failed. Please try again.');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +99,13 @@ export default function Register() {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setRegisterError('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -44,73 +116,166 @@ export default function Register() {
         options: {
           data: {
             display_name: name,
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/register`
         }
       });
 
       if (error) {
-        // If Supabase fails, use demo mode
+        // If Supabase fails, check if it's email already exists
+        if (error.message.includes('already registered')) {
+          setRegisterError('This email is already registered. Please login instead.');
+          setLoading(false);
+          return;
+        }
+        
+        // Demo mode fallback
         console.log('Supabase error, using demo mode:', error.message);
         
-        // Demo mode - create user locally
-        const demoUser = {
-          id: `user_${Date.now()}`,
+        // Save pending user for verification
+        const pendingUser = {
+          id: `pending_${Date.now()}`,
           email,
           displayName: name,
           role: 'user',
-          isActive: true,
+          isActive: false, // Not active until verified
+          emailVerified: false,
           createdAt: new Date(),
-          subscription: { tier: 'free', status: 'active', startDate: new Date() }
+          subscription: { tier: 'free', status: 'pending', startDate: new Date() }
         };
         
-        localStorage.setItem('user', JSON.stringify(demoUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        setUser(demoUser as any);
-        setIsAuthenticated(true);
-        navigate('/pricing');
+        // Store pending user
+        const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+        pendingUsers.push(pendingUser);
+        localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+        
+        // Show verification sent message
+        setVerificationSent(true);
+        setLoading(false);
         return;
       }
 
       if (data.user) {
-        const newUser = {
-          id: data.user.id,
-          email: data.user.email || email,
-          displayName: name,
-          role: 'user',
-          isActive: true,
-          createdAt: new Date(),
-          subscription: { tier: 'free', status: 'active', startDate: new Date() }
-        };
+        // Check if email confirmation is required
+        if (data.session === null && data.user.email_confirmed_at === null) {
+          // Confirmation email sent
+          setVerificationSent(true);
+        } else {
+          // Auto-confirmed, create user
+          const newUser = {
+            id: data.user.id,
+            email: data.user.email || email,
+            displayName: name,
+            role: 'user',
+            isActive: true,
+            emailVerified: true,
+            createdAt: new Date(),
+            subscription: { tier: 'free', status: 'active', startDate: new Date() }
+          };
 
-        localStorage.setItem('user', JSON.stringify(newUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        setUser(newUser as any);
-        setIsAuthenticated(true);
-        navigate('/pricing');
+          localStorage.setItem('user', JSON.stringify(newUser));
+          localStorage.setItem('isAuthenticated', 'true');
+          setUser(newUser as any);
+          setIsAuthenticated(true);
+          navigate('/dashboard');
+        }
       }
     } catch (err) {
       console.error('Registration error:', err);
-      // Fallback to demo mode
-      const demoUser = {
-        id: `user_${Date.now()}`,
-        email,
-        displayName: name,
-        role: 'user',
-        isActive: true,
-        createdAt: new Date(),
-        subscription: { tier: 'free', status: 'active', startDate: new Date() }
-      };
-      
-      localStorage.setItem('user', JSON.stringify(demoUser));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(demoUser as any);
-      setIsAuthenticated(true);
-      navigate('/pricing');
+      setRegisterError('Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Show verification pending screen
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-md text-center">
+          <div className="w-20 h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Mail className="w-10 h-10 text-cyan-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
+          <p className="text-slate-400 mb-6">
+            We've sent a verification link to <span className="text-cyan-400">{email}</span>
+          </p>
+          <p className="text-slate-400 text-sm mb-6">
+            Click the link in the email to activate your account.
+          </p>
+          <div className="p-4 bg-slate-700/50 rounded-xl mb-6">
+            <p className="text-slate-400 text-sm">
+              Didn't receive the email? Check your spam folder or
+            </p>
+            <button 
+              onClick={() => setVerificationSent(false)}
+              className="text-cyan-400 hover:text-cyan-300 mt-2"
+            >
+              Try again
+            </button>
+          </div>
+          <button 
+            onClick={() => navigate('/login')}
+            className="text-slate-400 hover:text-white"
+          >
+            Already verified? Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show verification in progress
+  if (verifying) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-md text-center">
+          <Loader2 className="w-12 h-12 text-cyan-400 animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-bold text-white mb-2">Verifying Email...</h2>
+          <p className="text-slate-400">Please wait while we verify your email</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show verification success
+  if (verified) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-md text-center">
+          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-10 h-10 text-green-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Email Verified!</h2>
+          <p className="text-slate-400 mb-6">Your account has been activated successfully.</p>
+          <p className="text-cyan-400">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show verification error
+  if (verificationError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl border border-red-500/30 p-8 max-w-md text-center">
+          <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Mail className="w-10 h-10 text-red-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Verification Failed</h2>
+          <p className="text-slate-400 mb-6">{verificationError}</p>
+          <button 
+            onClick={() => navigate('/register')}
+            className="px-6 py-3 bg-cyan-500 text-white rounded-xl"
+          >
+            Register Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show registration form
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -119,15 +284,13 @@ export default function Register() {
         </button>
 
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8">
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <Bot className="w-7 h-7 text-white" />
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Bot className="w-8 h-8 text-white" />
             </div>
-            <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">FlowvVibe</span>
+            <h1 className="text-3xl font-bold text-white">Create Account</h1>
+            <p className="text-slate-400 mt-2">Start building AI chatbots today</p>
           </div>
-
-          <h2 className="text-2xl font-bold text-white text-center mb-2">Create Account</h2>
-          <p className="text-slate-400 text-center mb-8">Start building chatbots today</p>
 
           {registerError && (
             <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-6">{registerError}</div>
@@ -135,46 +298,83 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-slate-400 mb-2">Name</label>
+              <label className="block text-slate-400 mb-2 text-sm">Full Name</label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none" />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="John Doe"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  required
+                />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-2">Email</label>
+              <label className="block text-slate-400 mb-2 text-sm">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  required
+                />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-2">Password</label>
+              <label className="block text-slate-400 mb-2 text-sm">Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full pl-12 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-12 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-2">Confirm Password</label>
+              <label className="block text-slate-400 mb-2 text-sm">Confirm Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  required
+                />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-semibold rounded-xl transition-all disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold rounded-xl hover:from-cyan-400 hover:to-purple-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
               {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 
-          <p className="text-slate-400 text-center mt-6">
+          <p className="text-center text-slate-400 mt-6">
             Already have an account? <button onClick={() => navigate('/login')} className="text-cyan-400 hover:text-cyan-300">Login</button>
           </p>
         </div>

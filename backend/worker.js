@@ -78,6 +78,10 @@ export default {
         return handleRegister(request, env);
       }
 
+      if (path === '/api/auth/verify' && request.method === 'POST') {
+        return handleVerifyEmail(request, env);
+      }
+
       // Pricing Plans API
       if (path === '/api/pricing' && request.method === 'GET') {
         return handleGetPricing(env);
@@ -257,17 +261,29 @@ async function handleLogin(request, env) {
     // Try to find user in database
     if (env.NEON_DATABASE_URL) {
       try {
-        const users = await queryNeon(env, "SELECT id, email, display_name, role FROM profiles WHERE email = $1", [email]);
+        const users = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified FROM profiles WHERE email = $1", [email]);
         
         if (users && users.length > 0) {
-          // In production, verify password hash here
           const user = users[0];
+          
+          // Check if email is verified
+          if (!user.email_verified && !user.is_active) {
+            return new Response(JSON.stringify({ 
+              error: 'Email not verified. Please check your email and click the verification link.',
+              needsVerification: true,
+              email: email
+            }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          
+          // In production, verify password hash here
           return new Response(JSON.stringify({
             user: {
               id: user.id,
               email: user.email,
               displayName: user.display_name,
               role: user.role || 'user',
+              isActive: user.is_active,
+              emailVerified: user.email_verified
             },
             token: `token_${Date.now()}`,
           }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -328,16 +344,60 @@ async function handleRegister(request, env) {
       }
     }
 
-    // Demo mode fallback
+    // Demo mode fallback - create unverified user
     return new Response(JSON.stringify({
       user: {
         id: `user_${Date.now()}`,
         email,
         displayName: displayName || email.split('@')[0],
         role: 'user',
-        subscription: { tier: 'free', status: 'active' },
+        isActive: false,
+        emailVerified: false,
+        subscription: { tier: 'free', status: 'pending' },
       },
       token: `demo_token_${Date.now()}`,
+      message: 'Verification email sent'
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+}
+
+// Auth: Verify Email
+async function handleVerifyEmail(request, env) {
+  try {
+    const { token, email } = await request.json();
+    
+    if (!token || !email) {
+      return new Response(JSON.stringify({ error: 'Token and email required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    
+    // Verify in database
+    if (env.NEON_DATABASE_URL) {
+      const verified = await queryNeon(env, 
+        "UPDATE profiles SET email_verified = true, is_active = true, updated_at = NOW() WHERE email = $1 RETURNING id",
+        [email]
+      );
+      
+      if (verified && verified.length > 0) {
+        // Create subscription for verified user
+        await queryNeon(env,
+          "INSERT INTO user_subscriptions (id, user_id, tier_id, status, start_date, expires_at) VALUES ($1, $2, 'free', 'active', NOW(), NOW() + INTERVAL '1 year') ON CONFLICT DO NOTHING",
+          [crypto.randomUUID(), verified[0].id]
+        );
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Email verified successfully',
+          user: { email, verified: true }
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+    
+    // Demo mode - verify locally
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'Email verified (demo mode)'
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

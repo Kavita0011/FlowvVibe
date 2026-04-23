@@ -143,6 +143,13 @@ export default function Login() {
       });
 
       if (error) {
+        // Check if it's an email not verified error from Supabase
+        if (error.message.includes('Email not confirmed') || error.message.includes('verify your email')) {
+          setLoginError('Please verify your email first. Check your inbox for the verification link.');
+          setLoading(false);
+          return;
+        }
+        
         console.log('Supabase login failed, trying demo mode');
         // Demo mode fallback for any email/password
         const demoUser: User = { 
@@ -179,8 +186,14 @@ export default function Login() {
         setIsAuthenticated(true);
         navigate('/dashboard');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
+      // Check if it's a verification required error from API
+      if (err?.needsVerification || (err?.message && err.message.includes('verify'))) {
+        setLoginError('Please verify your email first. Check your inbox for the verification link.');
+        setLoading(false);
+        return;
+      }
       // Fallback to demo mode
       const demoUser: User = { 
         id: `user_${Date.now()}`, 
