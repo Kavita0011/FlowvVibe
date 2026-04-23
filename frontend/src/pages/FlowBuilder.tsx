@@ -411,7 +411,7 @@ export default function FlowBuilder() {
                         >
                           <item.icon className={cn("w-4 h-4", isPremium && !isPro ? "text-slate-500" : "text-cyan-400")} />
                           <span className={cn("text-sm truncate", isPremium && !isPro ? "text-slate-500" : "text-white")}>{item.label}</span>
-                          {isPremium && !isPro && <span className="ml-auto text-xs text-slate-500">PRO</span>}
+                          {isPremium && !isPro && <span className="ml-auto text-xs text-slate-500">PRO+</span>}
                         </div>
                       );
                     })}
@@ -493,9 +493,14 @@ export default function FlowBuilder() {
                 setExporting(true);
                 setTimeout(() => setExporting(false), 1500);
               }}
-              disabled={exporting}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-              title={user?.subscription?.tier === 'free' ? "Upgrade to Export" : "Export"}
+              disabled={user?.subscription?.tier === 'free' || user?.subscription?.tier === 'starter'}
+              className={cn(
+                "p-2 hover:bg-slate-700 rounded-lg transition-colors",
+                user?.subscription?.tier === 'free' || user?.subscription?.tier === 'starter' 
+                  ? "text-slate-600 cursor-not-allowed" 
+                  : "text-slate-400 hover:text-white"
+              )}
+              title={user?.subscription?.tier === 'free' || user?.subscription?.tier === 'starter' ? "Upgrade to Pro+ to Export" : "Export"}
             >
               {exporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
             </button>

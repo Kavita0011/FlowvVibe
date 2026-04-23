@@ -7,9 +7,9 @@
 **Type:** SaaS Web Application
 **Tech Stack:**
 - Frontend: React + TypeScript + Vite + Tailwind CSS + Zustand + React Flow
-- Backend: Express.js + PostgreSQL + JWT
-- Database: PostgreSQL with pgAdmin
-- Deployment: Docker
+- Backend: Cloudflare Workers (Edge Functions)
+- Database: Neon PostgreSQL
+- Hosting: Cloudflare Pages + Workers
 
 ## 🚀 Quick Start
 
@@ -22,25 +22,26 @@ cd FlowvVibe
 # Frontend
 cd frontend && npm install && npm run dev
 
-# Backend (requires Docker for PostgreSQL)
-docker-compose up -d
+# Backend (Cloudflare Workers)
+cd backend && npx wrangler dev
 ```
 
 ### Production
 ```bash
-docker-compose up -d --build
+# Deploy to Cloudflare
+npm run deploy
 ```
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   Backend  │────▶│ PostgreSQL │
-│   (Vite)    │     │  (Express) │     │  Database  │
+│   Frontend  │────▶│   Backend   │────▶│   Neon DB   │
+│  (Pages)    │     │  (Workers)  │     │ PostgreSQL │
 └─────────────┘     └─────────────┘     └─────────────┘
       │                   │                   │
-    React Flow        REST API           pgAdmin
-    Widget           JWT Auth           (Port 5050)
+  React Flow        REST API           Edge Caching
+  Widget           JWT Auth           Rate Limiting
 ```
 
 ## 📦 Features
@@ -53,16 +54,24 @@ docker-compose up -d --build
 - [x] Analytics Dashboard
 - [x] Live Chat Widget
 - [x] Embed Code Generator
+- [x] Invoice Generation
+
+### Security Features
+- [x] Rate Limiting (enterprise-grade)
+- [x] Input Validation & Sanitization
+- [x] Session Tokens
+- [x] Security Headers (CSP, HSTS, X-Frame-Options)
+- [x] Password Hashing (bcrypt)
+- [x] Admin Approval Workflow
 
 ### Premium Add-ons
 | Feature | Price | Description |
 |---------|-------|-------------|
-| Booking System | ₹199/mo | Appointment scheduling |
-| Voice Calls | ₹299/mo | Twilio integration |
-| Email Marketing | ₹249/mo | SMTP automation |
-| Human Handoff | ₹149/mo | Live agent transfer |
-| Webhooks/Zapier | ₹199/mo | 5000+ app connections |
-| CRM Integration | ₹349/mo | Salesforce/HubSpot |
+| Booking System | ₹499/mo | Appointment scheduling |
+| Email Marketing | ₹599/mo | SMTP automation |
+| Human Handoff | ₹349/mo | Live agent transfer |
+| Webhooks/Zapier | ₹499/mo | 5000+ app connections |
+| CRM Integration | ₹799/mo | Salesforce/HubSpot |
 
 ### Integrations
 - Slack (OAuth)
@@ -90,6 +99,7 @@ docker-compose up -d --build
 | /embed | Widget Generator |
 | /credentials | Client Credentials |
 | /guide | User Guide |
+| /invoice | Invoice Generator |
 | /admin | Admin Panel |
 | /admin/settings | Admin Settings |
 
@@ -129,66 +139,88 @@ docker-compose up -d --build
 - POST /api/slack/events - Slack events
 - POST /api/whatsapp/webhook - WhatsApp events
 
-## 🐳 Docker Services
+## 🔐 Environment Variables
 
-| Service | Port | Description |
-|---------|------|-------------|
-| frontend | 5173 | React dev server |
-| backend | 3001 | Express API |
-| postgres | 5432 | PostgreSQL |
-| pgadmin | 5050 | Database admin |
-| widget | 3002 | Chat widget |
-
-## 🔧 Environment Variables
-
-### Backend (.env)
+### Backend (wrangler.toml / Cloudflare Secrets)
 ```
-PORT=3001
-DATABASE_URL=postgresql://flowvibe:flowvibe2024@postgres:5432/flowvibe
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=flowvibe
-DB_USER=postgres
-DB_PASSWORD=your-password
-JWT_SECRET=flowvibe-jwt-secret-2024
-OPENROUTER_API_KEY=
-SLACK_BOT_TOKEN=
-SLACK_SIGNING_SECRET=
-WHATSAPP_TOKEN=
-WHATSAPP_PHONE_ID=
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
+DATABASE_URL=postgresql://user:password@host/database
+JWT_SECRET=your-jwt-secret
+ADMIN_EMAIL=admin@flowvibe.ai
 ```
 
-> The frontend communicates with your backend API via `VITE_API_URL`. No Supabase client keys are required in frontend runtime for this project.
-
-## Frontend (.env)
+### Frontend (.env)
 ```
-VITE_API_URL=http://localhost:3001
+VITE_API_URL=https://your-worker.workers.dev
 ```
 
-## 📱 Running the Application
+> **Note:** All credentials are stored in Cloudflare Secrets, never hardcoded.
 
-### Option 1: Docker (Recommended)
+## 🔒 Security Specifications
+
+### Rate Limiting
+- Login: 5 requests/minute
+- Register: 3 requests/minute
+- API: 100 requests/minute
+- Payment: 10 requests/minute
+
+### Input Validation
+- Email format validation
+- Password strength requirements
+- SQL injection prevention
+- XSS protection
+
+### Headers
+- Content-Security-Policy
+- HSTS (HTTP Strict Transport Security)
+- X-Frame-Options
+- X-Content-Type-Options
+
+## 💰 Payment System
+
+### Workflow
+1. User selects plan → Payment page
+2. UPI/Bank transfer → Submit UTR
+3. **Pending** status → Awaiting admin approval
+4. Admin verifies payment → Approves/Rejects
+5. Approved → User access activated
+6. Invoice generated → Download
+
+### Admin Approval Required
+All payments require manual admin approval before activation. This prevents:
+- Fraudulent payments
+- Duplicate activations
+- Incorrect UTR submissions
+
+## 📱 Contact
+
+**Email Only:** support@flowvibe.ai
+
+> Phone numbers have been removed from all forms. Email is the primary contact method.
+
+## 🚀 Deployment
+
+### Cloudflare (Recommended)
 ```bash
-docker-compose up -d
-# Access:
-# - Frontend: http://localhost:5173
-# - Backend: http://localhost:3001
-# - pgAdmin: http://localhost:5050
+# Frontend: Cloudflare Pages
+# - Unlimited bandwidth
+# - Free SSL
+# - Custom domains
+# - Auto-deploy from GitHub
+
+# Backend: Cloudflare Workers
+# - 100K requests/day free
+# - Edge computing
+# - Global CDN
+
+# Database: Neon PostgreSQL
+# - Free tier available
+# - PostgreSQL compatible
 ```
 
-### Option 2: Manual
-```bash
-# Terminal 1: PostgreSQL
-docker run -p 5432:5432 -e POSTGRES_PASSWORD=flowvibe2024 postgres:16
-
-# Terminal 2: Backend
-cd backend && npm install && npm run dev
-
-# Terminal 3: Frontend
-cd frontend && npm install && npm run dev
-```
+### Access Points
+- Frontend: https://flowvibe.pages.dev
+- API: https://flowvibe.workers.dev
+- Database: Neon console
 
 ## 📊 User Guide Links
 

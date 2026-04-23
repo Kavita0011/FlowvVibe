@@ -7,109 +7,11 @@ const sections = [
     id: 'collection',
     title: 'Information We Collect',
     content: `We collect information you provide directly to us, including:
-• Account information (name, email, phone number)
+• Account information (name, email)
 • Business details (company name, website)
 • Payment information (processed securely via Razorpay)
 • Chatbot configurations and conversation data
 • Integration credentials you choose to connect`
-
-  },
-  {
-    id: 'usage',
-    title: 'How We Use Your Information',
-    content: `We use the information we collect to:
-• Provide, maintain, and improve our services
-• Process transactions and send related information
-• Send you technical notices, updates, and support messages
-• Respond to your comments and questions
-• Analyze usage patterns to improve user experience
-• Comply with legal obligations`
-
-  },
-  {
-    id: 'sharing',
-    title: 'Information Sharing',
-    content: `We do not sell, trade, or otherwise transfer your personal information to outside parties. We may share information with:
-• Service providers who assist in our operations (under confidentiality agreements)
-• Legal authorities when required by law
-• Business transfer parties in case of merger/acquisition
-
-Your chatbot data and conversations remain yours. We never use your customer data for our own marketing.`
-
-  },
-  {
-    id: 'security',
-    title: 'Data Security',
-    content: `We implement appropriate technical and organizational measures to protect your personal information:
-• SSL encryption for all data transmitted
-• Encrypted storage for sensitive data
-• Regular security audits
-• Access controls and authentication
-• Employee confidentiality agreements
-
-However, no method of transmission over the Internet is 100% secure. We cannot guarantee absolute security.`
-
-  },
-  {
-    id: 'cookies',
-    title: 'Cookies & Tracking',
-    content: `We use cookies and similar tracking technologies to:
-• Keep you logged in
-• Remember your preferences
-• Analyze traffic and trends
-• Improve our services
-
-You can instruct your browser to refuse cookies. Some features may not function properly without cookies.`
-
-  },
-  {
-    id: 'thirdparty',
-    title: 'Third-Party Services',
-    content: `Our service integrates with third-party platforms you connect:
-• WhatsApp, Telegram, Slack
-• Calendar services (Google Calendar, Cal.com)
-• Email services (SMTP)
-• Payment gateways (Razorpay)
-• Voice services (Twilio)
-
-Each third-party service has its own privacy policy. We encourage you to review their policies.`
-
-  },
-  {
-    id: 'retention',
-    title: 'Data Retention',
-    content: `We retain personal information as long as your account is active or as needed to provide services. You can request deletion of your data at any time.
-
-Chatbot conversations are retained based on your plan. Free plans: 30 days. Paid plans: Duration of subscription + 30 days.`
-
-  },
-  {
-    id: 'rights',
-    title: 'Your Rights',
-    content: `Under applicable data protection laws, you have the right to:
-• Access your personal information
-• Correct inaccurate data
-• Request deletion of your data
-• Object to processing
-• Data portability
-• Withdraw consent
-
-To exercise these rights, contact us at devappkavita@gmail.com`
-
-  },
-  {
-    id: 'children',
-    title: "Children's Privacy",
-    content: `Our service is not intended for children under 13. We do not knowingly collect information from children under 13. If we become aware of such collection, we will delete it promptly.`
-
-  },
-  {
-    id: 'changes',
-    title: 'Changes to This Policy',
-    content: `We may update this privacy policy periodically. We will notify you of any material changes by posting the new policy on this page and updating the "Last Updated" date.
-
-Your continued use of our service after changes constitutes acceptance of the new policy.`
-
   }
 ];
 

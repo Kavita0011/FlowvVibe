@@ -40,10 +40,10 @@ const features = [
   { icon: MessageSquare, title: 'Visual Builder', desc: 'Drag-drop flow design with React Flow' },
   { icon: Globe, title: 'Multi-Channel', desc: 'Website, WhatsApp, Telegram & more' },
   { icon: Zap, title: 'Auto Learning', desc: 'Improves from feedback' },
-  { icon: Phone, title: 'Voice Ready', desc: 'IVR and voice AI support' },
   { icon: Mail, title: 'Email Automation', desc: 'Smart auto-replies' },
-  { icon: Shield, title: 'Lead Capture', desc: 'Validated contact collection' },
-  { icon: Clock, title: '24/7 Support', desc: 'Always-on customer service' }
+  { icon: Shield, title: 'Lead Capture', desc: 'Email collection with validation' },
+  { icon: Clock, title: '24/7 Support', desc: 'Always-on customer service' },
+  { icon: CreditCard, title: 'Easy Payments', desc: 'UPI & bank transfer integration' }
 ];
 
 const pricingPlans = [

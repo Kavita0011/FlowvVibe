@@ -87,39 +87,50 @@ export default function AdminSettings() {
     setTimeout(() => setSaveSettingsMsg(''), 2000);
   };
 
-  const changePassword = () => {
-    // Verify current password
-    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || '';
-    const adminPassHash = import.meta.env.VITE_ADMIN_PASSWORD_HASH || '';
-    const inputHash = btoa(currentPassword + 'flowvibe_salt_2024');
-    
-    if (!adminEmail || !adminPassHash) {
-      setPasswordMsg('Admin credentials not configured in Cloudflare');
-      return;
-    }
-    
-    if (inputHash !== adminPassHash) {
-      setPasswordMsg('Current password is incorrect');
-      return;
-    }
-    
+  const changePassword = async () => {
     if (newPassword !== confirmPassword) {
       setPasswordMsg('New passwords do not match');
       return;
     }
     
-    if (newPassword.length < 6) {
-      setPasswordMsg('Password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      setPasswordMsg('Password must be at least 8 characters');
       return;
     }
     
-    // Save new password hash for next login
-    const newHash = btoa(newPassword + 'flowvibe_salt_2024');
-    localStorage.setItem('pendingPasswordHash', newHash);
-    setPasswordMsg('Password updated! It will work from next login.');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    if (!/[A-Z]/.test(newPassword)) {
+      setPasswordMsg('Password must contain at least one uppercase letter');
+      return;
+    }
+    
+    if (!/[0-9]/.test(newPassword)) {
+      setPasswordMsg('Password must contain at least one number');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          email: 'devappkavita@gmail.com'
+        })
+      });
+      
+      if (response.ok) {
+        setPasswordMsg('Password updated successfully!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPasswordMsg('Failed to update password');
+      }
+    } catch (err) {
+      setPasswordMsg('Error updating password. Use wrangler secret put NEW_ADMIN_PASSWORD');
+    }
+    
     setTimeout(() => setPasswordMsg(''), 3000);
   };
 

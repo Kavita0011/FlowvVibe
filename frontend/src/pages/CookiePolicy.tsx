@@ -111,7 +111,6 @@ Your continued use constitutes acceptance.`
     content: `Questions about our Cookie Policy?
 
 Contact: devappkavita@gmail.com
-Phone: +91 45065191325
 
 We respond within 24-48 hours.`
   }

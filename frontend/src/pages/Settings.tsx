@@ -17,8 +17,7 @@ export default function Settings() {
 
   const [profile, setProfile] = useState({
     displayName: user?.displayName || '',
-    email: user?.email || '',
-    phone: ''
+    email: user?.email || ''
   });
 
   const [notifications, setNotifications] = useState({
@@ -126,15 +125,6 @@ export default function Settings() {
                       type="email"
                       value={profile.email}
                       onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-2">Phone (optional)</label>
-                    <input
-                      type="tel"
-                      value={profile.phone}
-                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                     />
                   </div>
