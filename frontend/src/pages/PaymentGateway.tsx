@@ -23,13 +23,13 @@ const getPaymentSettings = () => {
 };
 
 const defaultSettings = {
-  upi: 'devappkavita@oksbi',
-  bankName: 'State Bank of India',
+  upi: import.meta.env.VITE_ADMIN_UPI || 'support@flowvibe',
+  bankName: import.meta.env.VITE_BANK_NAME || 'FlowvVibe',
   accountNumber: '',
   ifsc: ''
 };
 
-const RAZORPAY_KEY = 'rzp_live_Sgm4nHdmhUAnut';
+const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || '';
 
 export default function PaymentGateway() {
   const navigate = useNavigate();

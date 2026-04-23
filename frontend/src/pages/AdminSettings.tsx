@@ -81,7 +81,8 @@ export default function AdminSettings() {
   const [passwordMsg, setPasswordMsg] = useState('');
 
   const savePaymentSettings = async () => {
-    const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode, supportEmail: 'devappkavita@gmail.com' };
+    const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || 'support@flowvibe.com';
+    const settings = { upi: upiId, bankName, accountNumber, ifsc: ifscCode, supportEmail };
     
     // Try to save to database
     const API_URL = import.meta.env.VITE_API_URL;
@@ -125,13 +126,14 @@ export default function AdminSettings() {
     }
     
     try {
+      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || '';
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currentPassword,
           newPassword,
-          email: 'devappkavita@gmail.com'
+          email: adminEmail
         })
       });
       
@@ -896,8 +898,9 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">Admin Email</label>
                     <input
                       type="email"
-                      defaultValue="devappkavita@gmail.com"
+                      defaultValue={import.meta.env.VITE_ADMIN_EMAIL || ''}
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+                      readOnly
                     />
                   </div>
                   <div>
@@ -1003,7 +1006,7 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">Support Email</label>
                     <input
                       type="email"
-                      defaultValue="devappkavita@gmail.com"
+                      defaultValue={import.meta.env.VITE_SUPPORT_EMAIL || 'support@flowvibe.com'}
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>

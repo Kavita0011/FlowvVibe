@@ -127,11 +127,24 @@ export default function Landing() {
 
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate sending email (in production, this would call your backend API)
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('Contact form submitted:', contactForm);
-    // In real app, send to: devappkavita@gmail.com
-    alert(`Thank you! Your message has been sent. We'll contact you at ${contactForm.email}`);
+    const API_URL = import.meta.env.VITE_API_URL;
+    
+    try {
+      if (API_URL) {
+        await fetch(`${API_URL}/api/contact`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: contactForm.name,
+            email: contactForm.email,
+            message: contactForm.message
+          })
+        });
+      }
+    } catch (err) {
+      // Silent fail
+    }
+    
     setContactSent(true);
   };
 

@@ -1,15 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, AlertTriangle, Shield, Loader2 } from 'lucide-react';
-import { checkRateLimit, createSessionToken, validateEmail, sanitizeInput } from '../lib/security';
-import { supabase } from '../lib/supabase';
+import { validateEmail, sanitizeInput } from '../lib/security';
+import { auth } from '../lib/api';
 import type { User } from '../types';
-
-const ADMIN_EMAIL = 'devappkavita@gmail.com';
-const ADMIN_PASSWORD = 'admin@flowvibe2026';
-const DEMO_EMAILS = ['demo@demo.com', 'demo@flowvibe.ai'];
-const DEMO_PASSWORDS = ['demo', 'demo123'];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -28,6 +23,52 @@ export default function Login() {
       setLoginError('Please enter both email and password');
       return;
     }
+    
+    if (!validateEmail(email)) {
+      setLoginError('Invalid email format');
+      return;
+    }
+
+    const sanitizedEmail = sanitizeInput(email);
+    const sanitizedPassword = password;
+    setLoading(true);
+
+    try {
+      const response = await auth.login(sanitizedEmail, sanitizedPassword);
+      
+      const userData: User = {
+        id: response.user.id,
+        email: response.user.email,
+        displayName: response.user.displayName,
+        role: response.user.role,
+        subscription: response.user.subscription || { tier: 'free', status: 'active' },
+        createdAt: new Date(),
+        isActive: response.user.isActive,
+        emailVerified: response.user.emailVerified,
+      } as User;
+      
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isAuthenticated', 'true');
+      
+      setUser(userData);
+      setIsAuthenticated(true);
+      
+      if (userData.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      if (err.message?.includes('not verified')) {
+        setLoginError('Email not verified. Please check your inbox.');
+      } else {
+        setLoginError(err.message || 'Login failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
     
     if (!validateEmail(email)) {
       setLoginError('Invalid email format');
@@ -209,14 +250,6 @@ export default function Login() {
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
-
-          <div className="mt-6 p-4 bg-slate-700/30 rounded-xl">
-            <p className="text-slate-400 text-sm mb-2">Demo Accounts:</p>
-            <div className="text-xs text-slate-500 space-y-1">
-              <p><span className="text-cyan-400">Admin:</span> devappkavita@gmail.com / admin@flowvibe2026</p>
-              <p><span className="text-cyan-400">Demo:</span> demo@demo.com / demo</p>
-            </div>
-          </div>
 
           <p className="text-center text-slate-400 mt-6">
             Don't have an account? <button onClick={() => navigate('/register')} className="text-cyan-400 hover:text-cyan-300">Sign up</button>
