@@ -181,7 +181,7 @@ export default function UserGuide() {
         <div className="mt-8 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-xl p-6 border border-cyan-500/30">
           <h3 className="text-white font-semibold mb-2">Need More Help?</h3>
           <p className="text-slate-400 mb-4">Contact our support team</p>
-          <a href="mailto:support@flowvibe.ai" className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400">
+          <a href="mailto:devappkavita@gmail.com" className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400">
             <HelpCircle className="w-4 h-4" /> Contact Support
           </a>
         </div>

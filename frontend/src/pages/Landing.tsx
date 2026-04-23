@@ -130,7 +130,7 @@ export default function Landing() {
     // Simulate sending email (in production, this would call your backend API)
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('Contact form submitted:', contactForm);
-    // In real app, send to: support@flowvibe.ai
+    // In real app, send to: devappkavita@gmail.com
     alert(`Thank you! Your message has been sent. We'll contact you at ${contactForm.email}`);
     setContactSent(true);
   };

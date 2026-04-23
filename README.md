@@ -193,7 +193,7 @@ All payments require manual admin approval before activation. This prevents:
 
 ## 📱 Contact
 
-**Email Only:** support@flowvibe.ai
+**Email Only:** devappkavita@gmail.com
 
 > Phone numbers have been removed from all forms. Email is the primary contact method.
 
@@ -237,6 +237,6 @@ MIT License - See LICENSE file
 
 ## 🤝 Support
 
-- Email: support@flowvibe.ai
+- Email: devappkavita@gmail.com
 - Documentation: /guide
 - User Guide: https://flowvibe.ai/guide

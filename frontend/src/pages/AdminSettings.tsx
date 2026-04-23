@@ -965,7 +965,7 @@ export default function AdminSettings() {
                     <label className="block text-slate-400 mb-2 text-sm">Support Email</label>
                     <input
                       type="email"
-                      defaultValue="support@flowvibe.ai"
+                      defaultValue="devappkavita@gmail.com"
                       className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
