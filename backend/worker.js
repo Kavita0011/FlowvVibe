@@ -6,6 +6,8 @@
 const ALLOWED_ORIGINS = [
   'https://flowvibe.pages.dev',
   'https://flowvibe-frontend.pages.dev',
+  'https://flowvibe.devappkavita.workers.dev',
+  'https://flowvibe.kavitabishtofficial1.workers.dev',
   'http://localhost:5173',
   'http://localhost:3000',
 ];
@@ -215,34 +217,34 @@ async function verifyTokenSignature(token, secret) {
 
 // Failed login tracking
 function trackFailedLogin(email) {
-  if (!global.loginAttempts) global.loginAttempts = {};
+  if (!globalThis.loginAttempts) globalThis.loginAttempts = {};
   const key = email.toLowerCase();
   const now = Date.now();
   
-  if (!global.loginAttempts[key]) {
-    global.loginAttempts[key] = { count: 0, lockedUntil: 0 };
+  if (!globalThis.loginAttempts[key]) {
+    globalThis.loginAttempts[key] = { count: 0, lockedUntil: 0 };
   }
   
-  global.loginAttempts[key].count++;
-  global.loginAttempts[key].lastAttempt = now;
+  globalThis.loginAttempts[key].count++;
+  globalThis.loginAttempts[key].lastAttempt = now;
   
   // Lock after 5 failed attempts for 15 minutes
-  if (global.loginAttempts[key].count >= 5) {
-    global.loginAttempts[key].lockedUntil = now + (15 * 60 * 1000);
+  if (globalThis.loginAttempts[key].count >= 5) {
+    globalThis.loginAttempts[key].lockedUntil = now + (15 * 60 * 1000);
   }
   
   // Clean up old entries (older than 1 hour)
-  for (const k in global.loginAttempts) {
-    if (global.loginAttempts[k].lastAttempt < now - (60 * 60 * 1000)) {
-      delete global.loginAttempts[k];
+  for (const k in globalThis.loginAttempts) {
+    if (globalThis.loginAttempts[k].lastAttempt < now - (60 * 60 * 1000)) {
+      delete globalThis.loginAttempts[k];
     }
   }
 }
 
 function isAccountLocked(email) {
-  if (!global.loginAttempts) return false;
+  if (!globalThis.loginAttempts) return false;
   const key = email.toLowerCase();
-  const attempt = global.loginAttempts[key];
+  const attempt = globalThis.loginAttempts[key];
   
   if (!attempt) return false;
   
@@ -254,13 +256,13 @@ function isAccountLocked(email) {
 }
 
 function clearFailedLogins(email) {
-  if (!global.loginAttempts) return;
+  if (!globalThis.loginAttempts) return;
   const key = email.toLowerCase();
-  delete global.loginAttempts[key];
+  delete globalThis.loginAttempts[key];
 }
 
 // Generate secure token with HMAC signature
-async function generateToken(userId, role = 'user') {
+async function generateToken(userId, role = 'user', env = {}) {
   const payload = {
     userId,
     role,
@@ -336,7 +338,7 @@ function sanitizeString(str, maxLength = 255) {
 async function logActivity(env, userId, action, resourceType, resourceId, details) {
   if (!env.NEON_DATABASE_URL) return;
   
-  const clientIP = global.clientIP || 'unknown';
+  const clientIP = globalThis.clientIP || 'unknown';
   
   try {
     await queryNeon(env,
@@ -375,14 +377,14 @@ export default {
 
     // Get client IP for audit logging
     const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-    global.clientIP = clientIP;
+    globalThis.clientIP = clientIP;
 
     // Rate limiting check (simple in-memory)
     const rateKey = `${path}:${clientIP}`;
     const now = Date.now();
     
-    if (!global.rateLimits) global.rateLimits = {};
-    const rl = global.rateLimits[rateKey];
+    if (!globalThis.rateLimits) globalThis.rateLimits = {};
+    const rl = globalThis.rateLimits[rateKey];
     
     // Stricter limits for auth endpoints
     const isAuthEndpoint = path.startsWith('/api/auth');
@@ -396,9 +398,9 @@ export default {
     }
     
     if (!rl || now > rl.resetAt) {
-      global.rateLimits[rateKey] = { count: 1, resetAt: now + 60000 };
+      globalThis.rateLimits[rateKey] = { count: 1, resetAt: now + 60000 };
     } else {
-      global.rateLimits[rateKey].count++;
+      globalThis.rateLimits[rateKey].count++;
     }
 
     // Safe JSON parser wrapper
@@ -737,55 +739,67 @@ export default {
 // Neon Database Helper - uses HTTP to Neon project API
 // Note: Requires Neon paid plan for HTTP API access
 async function queryNeon(env, sql, params = []) {
-  if (!global.db) {
-    global.db = {
-      users: [],
-      chatbots: [],
-      payments: [],
-      messages: [],
-      leads: [],
-    };
+  if (!globalThis.db) {
+    globalThis.db = { users: [], chatbots: [], payments: [], messages: [], leads: [] };
   }
 
-  if (!env.NEON_PROJECT_ID || !env.NEON_API_KEY) {
+  const connectionString = env.NEON_DATABASE_URL;
+  if (!connectionString) {
     return demoQuery(sql, params);
   }
 
   try {
-    const endpoint = `https://console.neon.tech/api/v2/projects/${env.NEON_PROJECT_ID}/query`;
-    
-    const response = await fetch(endpoint, {
+    // Parse connection string: postgresql://user:pass@host/db
+    const stripped = connectionString.split('?')[0]
+      .replace(/^postgresql:\/\//, '')
+      .replace(/^postgres:\/\//, '');
+    const atIdx = stripped.lastIndexOf('@');
+    const credentials = stripped.substring(0, atIdx);
+    const hostAndDb = stripped.substring(atIdx + 1);
+    const colonIdx = credentials.indexOf(':');
+    const user = decodeURIComponent(credentials.substring(0, colonIdx));
+    const password = decodeURIComponent(credentials.substring(colonIdx + 1));
+    const host = hostAndDb.split('/')[0];
+
+    const authHeader = 'Basic ' + btoa(`${user}:${password}`);
+
+    const response = await fetch(`https://${host}/sql`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${env.NEON_API_KEY}`,
+        'Authorization': authHeader,
+        'Neon-Connection-String': connectionString,
       },
-      body: JSON.stringify({ queries: [{ sql, params: params || [] }] }),
+      body: JSON.stringify({ query: sql, params: params || [] }),
     });
 
     if (response.ok) {
       const result = await response.json();
-      return result.query_results || [];
+      // Neon HTTP API returns { rows: [...], fields: [...] }
+      return result.rows || [];
+    } else {
+      const errText = await response.text();
+      console.error('Neon HTTP API error:', response.status, errText);
     }
   } catch (e) {
-    // Silently fail - let it fallback
+    console.error('queryNeon error:', e.message);
   }
-  
+
   return demoQuery(sql, params);
 }
 
 function demoQuery(sql, params) {
-  if (!global.db) return [];
+  if (!globalThis.db) return [];
   const sqlLower = sql.toLowerCase();
   
   if (sqlLower.includes('insert') || sqlLower.includes('update') || sqlLower.includes('delete')) {
     return [];
   }
   if (sqlLower.includes('select')) {
-    if (sqlLower.includes('profiles') || sqlLower.includes('users')) return global.db.users;
-    if (sqlLower.includes('chatbots')) return global.db.chatbots;
-    if (sqlLower.includes('payment')) return global.db.payments;
-    if (sqlLower.includes('messages')) return global.db.messages;
+    if (sqlLower.includes('profiles') || sqlLower.includes('users')) return globalThis.db.users;
+    if (sqlLower.includes('chatbots')) return globalThis.db.chatbots;
+    if (sqlLower.includes('payment')) return globalThis.db.payments;
+    if (sqlLower.includes('messages')) return globalThis.db.messages;
   }
   return [];
 }
@@ -816,7 +830,7 @@ async function handleLogin(request, env) {
     // Admin login - only if credentials are properly configured
     if (adminEmail && adminPassword && email === adminEmail && password === adminPassword) {
       clearFailedLogins(email);
-      const token = await generateToken('admin_001', 'admin');
+      const token = await generateToken('admin_001', 'admin', env);
       return new Response(JSON.stringify({
         user: {
           id: 'admin_001',
@@ -861,7 +875,7 @@ async function handleLogin(request, env) {
           
           // Clear failed logins on successful login
           clearFailedLogins(email);
-          const token = await generateToken(user.id, user.role || 'user');
+          const token = await generateToken(user.id, user.role || 'user', env);
           return new Response(JSON.stringify({
             user: {
               id: user.id,
@@ -930,7 +944,7 @@ async function handleRegister(request, env) {
         
         if (newUser && newUser.length > 0) {
           const user = newUser[0];
-          const token = await generateToken(user.id, user.role || 'user');
+          const token = await generateToken(user.id, user.role || 'user', env);
           return new Response(JSON.stringify({
             user: {
               id: user.id,
@@ -1761,7 +1775,7 @@ async function handleGetAllPayments(request, env, adminAuth) {
     if (env.NEON_DATABASE_URL) {
       payments = await queryNeon(env, query, params);
     } else {
-      payments = global.db?.payments || [];
+      payments = globalThis.db?.payments || [];
     }
 
     return new Response(JSON.stringify(payments || []), {
@@ -2158,7 +2172,7 @@ async function handleGetAllUsers(request, env) {
         `SELECT id, email, display_name, role, is_active, created_at FROM profiles ORDER BY created_at DESC LIMIT 100`
       );
     } else {
-      users = global.db?.users || [];
+      users = globalThis.db?.users || [];
     }
     
     return new Response(JSON.stringify(users || []), { 
