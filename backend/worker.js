@@ -332,13 +332,6 @@ function sanitizeString(str, maxLength = 255) {
   return str.trim().slice(0, maxLength).replace(/[<>]/g, '');
 }
 
-// UUID validation
-function isValidUUID(str) {
-  if (!str || typeof str !== 'string') return false;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
-
 // Audit logging
 async function logActivity(env, userId, action, resourceType, resourceId, details) {
   if (!env.NEON_DATABASE_URL) return;
