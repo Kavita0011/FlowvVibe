@@ -21,23 +21,38 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const ALLOWED_ORIGINS = [
-  'https://flowvibe.kavitabishtofficial1.workers.dev',
-  'https://flowvibe.app',
+// Trusted origin patterns — add your deployed frontend URLs here or via ALLOWED_ORIGINS env var
+const ALLOWED_ORIGINS: string[] = [
   'http://localhost:5173',
   'http://localhost:3000',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()) : []),
+];
+
+const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
+  /^https:\/\/.*\.vercel\.app$/,
+  /^https:\/\/.*\.netlify\.app$/,
+  /^https:\/\/.*\.workers\.dev$/,
+  /^https:\/\/.*\.pages\.dev$/,
+  /^https:\/\/flowvibe\.app$/,
 ];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (ALLOWED_ORIGINS.some((o) => origin.includes(o))) {
+  const allowed =
+    ALLOWED_ORIGINS.includes(origin) ||
+    ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+
+  if (allowed) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
   next();
 });
 app.use(compression());

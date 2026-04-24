@@ -1,12 +1,20 @@
 import pg from 'pg';
 const { Pool } = pg;
 
+// Detect if we're connecting to Neon (serverless Postgres) or local
+const connectionString = process.env.DATABASE_URL || 
+  `postgresql://${process.env.DB_USER || 'flowvibe'}:${process.env.DB_PASSWORD || 'flowvibe2024'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'flowvibe'}`;
+
+const isNeon = connectionString.includes('neon.tech');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 
-    `postgresql://${process.env.DB_USER || 'flowvibe'}:${process.env.DB_PASSWORD || 'flowvibe2024'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'flowvibe'}`,
-  max: parseInt(process.env.DB_POOL_MAX || '30'),
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionString,
+  // Neon requires SSL; local Postgres does not
+  ssl: isNeon ? { rejectUnauthorized: false } : false,
+  // Neon's pooler manages connections externally — keep local pool small
+  max: parseInt(process.env.DB_POOL_MAX || (isNeon ? '5' : '10')),
+  idleTimeoutMillis: isNeon ? 10000 : 30000,
+  connectionTimeoutMillis: 10000,
   statement_timeout: 30000,
 });
 
