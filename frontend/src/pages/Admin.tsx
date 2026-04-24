@@ -11,7 +11,6 @@ import {
   AlertCircle, PauseCircle, PlayCircle, Archive
 } from 'lucide-react';
 import { admin } from '../lib/api';
-import { supabase } from '../lib/supabase-client';
 
 interface UserRow {
   id: string;
@@ -173,7 +172,7 @@ export default function Admin() {
     setEditableCredentials(prev => ({ ...prev, [field]: value }));
   };
 
-  // Fetch real data from database
+// Fetch real data from database
   useEffect(() => {
     async function loadAdminData() {
       if (!user?.id) return;
@@ -181,77 +180,53 @@ export default function Admin() {
       setLoading(true);
       console.log('Loading admin data...');
       try {
-        // Fetch all users via Supabase
+        // Fetch all users via API
         console.log('Fetching users...');
-        const { data: users, error: usersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (usersError) {
+        try {
+          const usersData = await admin.getUsers();
+          console.log('Users fetched:', usersData?.length || 0);
+          if (usersData) setDbUsers(usersData);
+        } catch (usersError: any) {
           console.error('Error fetching users:', usersError);
-        } else {
-          console.log('Users fetched:', users?.length || 0, users);
-          if (users) setDbUsers(users);
         }
 
-        // Fetch all chatbots via Supabase
+        // Fetch all chatbots via API
         console.log('Fetching chatbots...');
-        const { data: chatbots, error: botsError } = await supabase
-          .from('chatbots')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (botsError) {
+        try {
+          const chatbotsData = await admin.getChatbots();
+          console.log('Chatbots fetched:', chatbotsData?.length || 0);
+          if (chatbotsData) setDbChatbots(chatbotsData);
+        } catch (botsError: any) {
           console.error('Error fetching chatbots:', botsError);
-        } else {
-          console.log('Chatbots fetched:', chatbots?.length || 0, chatbots);
-          if (chatbots) setDbChatbots(chatbots);
         }
 
         // Fetch all payments via API
         console.log('Fetching payments...');
         try {
           const payments = await admin.getPayments();
-          console.log('Payments fetched:', payments?.length || 0, payments);
+          console.log('Payments fetched:', payments?.length || 0);
           if (payments) setDbPayments(payments);
         } catch (payError: any) {
           console.error('Error fetching payments:', payError);
         }
 
-        // Fetch all leads via Supabase
+        // Fetch all leads via API
         console.log('Fetching leads...');
-        const { data: leads, error: leadsError } = await supabase
-          .from('leads')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (leadsError) {
-          console.error('Error fetching leads:', leadsError);
-        } else {
-          console.log('Leads fetched:', leads?.length || 0, leads);
+        try {
+          const leads = await admin.getLeads();
+          console.log('Leads fetched:', leads?.length || 0);
           if (leads) setDbLeads(leads);
+        } catch (leadsError: any) {
+          console.error('Error fetching leads:', leadsError);
         }
 
-        // Fetch recent conversations via Supabase
-        console.log('Fetching conversations...');
-        const { data: conversations, error: convError } = await supabase
-          .from('conversations')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(100);
-        if (convError) {
-          console.error('Error fetching conversations:', convError);
-        } else {
-          console.log('Conversations fetched:', conversations?.length || 0);
-          if (conversations) setDbConversations(conversations);
-        }
-
-        // Calculate stats
-        const totalRevenue = payments?.reduce((acc: number, p: any) => acc + (p.amount || 0), 0) || 0;
-        const activeConversations = conversations?.filter((c: any) => c.status === 'active').length || 0;
+        // Calculate stats from payments
+        const totalRevenue = dbPayments?.reduce((acc: number, p: any) => acc + (p.amount || 0), 0) || 0;
 
         setStats({
-          totalUsers: users?.length || 0,
-          activeChats: activeConversations,
-          messagesToday: conversations?.length || 0,
+          totalUsers: dbUsers?.length || 0,
+          activeChats: dbChatbots?.filter((b: any) => b.is_published).length || 0,
+          messagesToday: 0,
           revenue: totalRevenue
         });
       } catch (err) {
@@ -268,18 +243,14 @@ export default function Admin() {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (users) setDbUsers(users);
-      const { data: chatbots } = await supabase.from('chatbots').select('*').order('created_at', { ascending: false });
-      if (chatbots) setDbChatbots(chatbots);
-      try {
-        const payments = await admin.getPayments();
-        if (payments) setDbPayments(payments);
-      } catch (e) {}
-      const { data: leads } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+      const usersData = await admin.getUsers();
+      if (usersData) setDbUsers(usersData);
+      const chatbotsData = await admin.getChatbots();
+      if (chatbotsData) setDbChatbots(chatbotsData);
+      const payments = await admin.getPayments();
+      if (payments) setDbPayments(payments);
+      const leads = await admin.getLeads();
       if (leads) setDbLeads(leads);
-      const { data: conversations } = await supabase.from('conversations').select('*').order('created_at', { ascending: false });
-      if (conversations) setDbConversations(conversations);
     } catch (err) {
       console.error('Error refreshing data:', err);
     } finally {
@@ -291,7 +262,7 @@ export default function Admin() {
   const handleDeleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
     try {
-      await supabase.from('profiles').delete().eq('id', userId);
+      await admin.deleteUser(userId);
       setDbUsers(prev => prev.filter(u => u.id !== userId));
       setShowDeleteConfirm(null);
     } catch (err) {
@@ -301,7 +272,7 @@ export default function Admin() {
 
   const handleUpdateUser = async (userId: string, updates: Partial<UserRow>) => {
     try {
-      await supabase.from('profiles').update(updates).eq('id', userId);
+      await admin.updateUser({ userId, ...updates });
       setDbUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
       setShowUserModal(false);
     } catch (err) {
@@ -313,19 +284,28 @@ export default function Admin() {
   const handleDeleteChatbot = async (botId: string) => {
     if (!confirm('Are you sure you want to delete this chatbot?')) return;
     try {
-      await supabase.from('chatbots').delete().eq('id', botId);
+      await admin.deleteChatbot(botId);
       setDbChatbots(prev => prev.filter(b => b.id !== botId));
     } catch (err) {
       console.error('Error deleting chatbot:', err);
     }
   };
 
-  const handleUpdateChatbotStatus = async (botId: string, status: 'active' | 'inactive' | 'archived') => {
+  const handleApproveChatbot = async (botId: string) => {
     try {
-      await supabase.from('chatbots').update({ is_published: status === 'active', is_active: status === 'active' }).eq('id', botId);
-      setDbChatbots(prev => prev.map(b => b.id === botId ? { ...b, is_published: status === 'active', is_active: status === 'active' } : b));
+      await admin.approveChatbot({ chatbotId: botId });
+      setDbChatbots(prev => prev.map(b => b.id === botId ? { ...b, is_approved: true } : b));
     } catch (err) {
-      console.error('Error updating chatbot:', err);
+      console.error('Error approving chatbot:', err);
+    }
+  };
+
+  const handleRejectChatbot = async (botId: string) => {
+    try {
+      await admin.rejectChatbot({ chatbotId: botId });
+      setDbChatbots(prev => prev.map(b => b.id === botId ? { ...b, is_approved: false } : b));
+    } catch (err) {
+      console.error('Error rejecting chatbot:', err);
     }
   };
 
@@ -374,9 +354,9 @@ export default function Admin() {
   };
 
   // Lead CRUD
-  const handleUpdateLeadStatus = async (leadId: string, status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost') => {
+  const handleUpdateLeadStatus = async (leadId: string, status: string) => {
     try {
-      await supabase.from('leads').update({ status }).eq('id', leadId);
+      await admin.updateLead({ leadId, status });
       setDbLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l));
     } catch (err) {
       console.error('Error updating lead:', err);
@@ -386,7 +366,7 @@ export default function Admin() {
   const handleDeleteLead = async (leadId: string) => {
     if (!confirm('Are you sure you want to delete this lead?')) return;
     try {
-      await supabase.from('leads').delete().eq('id', leadId);
+      await admin.deleteLead(leadId);
       setDbLeads(prev => prev.filter(l => l.id !== leadId));
     } catch (err) {
       console.error('Error deleting lead:', err);

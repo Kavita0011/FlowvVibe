@@ -175,8 +175,14 @@ export const admin = {
 
   // Chatbots
   getChatbots: (status) => apiRequest(status ? `/admin/chatbots?status=${status}` : '/admin/chatbots'),
+  deleteChatbot: (chatbotId) => apiRequest('/admin/chatbots', { method: 'DELETE', body: JSON.stringify({ chatbotId }) }),
   approveChatbot: (data) => apiRequest('/admin/chatbots/approve', { method: 'POST', body: JSON.stringify(data) }),
   rejectChatbot: (data) => apiRequest('/admin/chatbots/reject', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Leads
+  getLeads: () => apiRequest('/admin/leads'),
+  updateLead: (data) => apiRequest('/admin/leads/update', { method: 'POST', body: JSON.stringify(data) }),
+  deleteLead: (leadId) => apiRequest('/admin/leads', { method: 'DELETE', body: JSON.stringify({ leadId }) }),
 
   // Settings
   getSettings: () => apiRequest('/admin/settings'),

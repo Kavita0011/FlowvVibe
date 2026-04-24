@@ -621,6 +621,23 @@ export default {
         return handleRejectChatbot(request, env, adminAuth);
       }
 
+      // Admin Leads Management
+      if (path === '/api/admin/leads' && request.method === 'GET') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleGetAllLeads(request, env, adminAuth);
+      }
+      if (path === '/api/admin/leads/update' && request.method === 'POST') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleUpdateLeadStatus(request, env, adminAuth);
+      }
+      if (path === '/api/admin/leads' && request.method === 'DELETE') {
+        const adminAuth = await verifyAdminAuth(request, env);
+        if (adminAuth.error) return new Response(JSON.stringify({ error: adminAuth.error }), { status: adminAuth.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        return handleDeleteLead(request, env, adminAuth);
+      }
+
       // Admin Payment Management
       if (path === '/api/admin/payments' && request.method === 'GET') {
         const adminAuth = await verifyAdminAuth(request, env);
@@ -1756,6 +1773,82 @@ async function handleGetAllPayments(request, env, adminAuth) {
 
     return new Response(JSON.stringify(payments || []), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// ============================================
+// Leads CRUD
+// ============================================
+
+async function handleGetAllLeads(request, env, adminAuth) {
+  try {
+    let leads = [];
+    if (env.NEON_DATABASE_URL) {
+      leads = await queryNeon(env, `SELECT l.*, c.name as chatbot_name, u.email as user_email
+        FROM leads l
+        LEFT JOIN chatbots c ON l.chatbot_id = c.id
+        LEFT JOIN profiles u ON c.user_id = u.id
+        ORDER BY l.created_at DESC LIMIT 100`);
+    }
+    
+    return new Response(JSON.stringify({ leads }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleUpdateLeadStatus(request, env, adminAuth) {
+  try {
+    const { leadId, status } = await request.json();
+    
+    if (!leadId || !status) {
+      return new Response(JSON.stringify({ error: 'Lead ID and status required' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env, 
+        "UPDATE leads SET status = $1, updated_at = NOW() WHERE id = $2",
+        [status, leadId]
+      );
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleDeleteLead(request, env, adminAuth) {
+  try {
+    const { leadId } = await request.json();
+    
+    if (!leadId) {
+      return new Response(JSON.stringify({ error: 'Lead ID required' }), { 
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (env.NEON_DATABASE_URL) {
+      await queryNeon(env, "DELETE FROM leads WHERE id = $1", [leadId]);
+    }
+    
+    return new Response(JSON.stringify({ success: true }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: 'Server error' }), {
