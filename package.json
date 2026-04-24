@@ -2,14 +2,9 @@
   "name": "flowvibe",
   "private": true,
   "version": "1.0.0",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
   "scripts": {
-    "dev:frontend": "npm run dev -w frontend",
-    "dev:backend": "npm run dev -w backend",
-    "build": "npm run build -w frontend",
-    "deploy:backend": "npm run deploy -w backend"
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "deploy": "npm run build && cd backend && wrangler deploy"
   }
 }
