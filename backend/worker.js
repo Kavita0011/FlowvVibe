@@ -736,8 +736,7 @@ export default {
   },
 };
 
-// Neon Database Helper - uses HTTP to Neon project API
-// Note: Requires Neon paid plan for HTTP API access
+// Neon Database Helper
 async function queryNeon(env, sql, params = []) {
   if (!globalThis.db) {
     globalThis.db = { users: [], chatbots: [], payments: [], messages: [], leads: [] };
@@ -749,38 +748,10 @@ async function queryNeon(env, sql, params = []) {
   }
 
   try {
-    // Parse connection string: postgresql://user:pass@host/db
-    const stripped = connectionString.split('?')[0]
-      .replace(/^postgresql:\/\//, '')
-      .replace(/^postgres:\/\//, '');
-    const atIdx = stripped.lastIndexOf('@');
-    const credentials = stripped.substring(0, atIdx);
-    const hostAndDb = stripped.substring(atIdx + 1);
-    const colonIdx = credentials.indexOf(':');
-    const user = decodeURIComponent(credentials.substring(0, colonIdx));
-    const password = decodeURIComponent(credentials.substring(colonIdx + 1));
-    const host = hostAndDb.split('/')[0];
-
-    const authHeader = 'Basic ' + btoa(`${user}:${password}`);
-
-    const response = await fetch(`https://${host}/sql`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-        'Neon-Connection-String': connectionString,
-      },
-      body: JSON.stringify({ query: sql, params: params || [] }),
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      // Neon HTTP API returns { rows: [...], fields: [...] }
-      return result.rows || [];
-    } else {
-      const errText = await response.text();
-      console.error('Neon HTTP API error:', response.status, errText);
-    }
+    const { neon } = await import('@neondatabase/serverless');
+    const sqlQuery = neon(connectionString);
+    const result = await sqlQuery(sql, params);
+    return result;
   } catch (e) {
     console.error('queryNeon error:', e.message);
   }
