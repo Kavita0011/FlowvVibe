@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
-    "deploy": "npm run build && cd backend && wrangler deploy"
+    "deploy": "npm run build && cd backend && npx wrangler deploy"
   }
 }
