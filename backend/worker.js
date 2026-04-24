@@ -731,7 +731,15 @@ export default {
       // Default: 404
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     } catch (err) {
-      return new Response(JSON.stringify({ error: 'Server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ 
+        error: 'Server error', 
+        message: err.message,
+        stack: err.stack,
+        path: path
+      }), { 
+        status: 500, 
+        headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } 
+      });
     }
   },
 };
