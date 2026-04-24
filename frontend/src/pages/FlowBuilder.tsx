@@ -362,24 +362,27 @@ export default function FlowBuilder() {
     const flow = { nodes: nodes as Node[], edges: edges as Edge[] };
     setFlowData(flow as any);
     
-    // Save to database
     if (currentChatbot?.id) {
-      const API_URL = import.meta.env.VITE_API_URL;
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const token = localStorage.getItem('token');
       try {
-        await fetch(`${API_URL}/api/chatbots`, {
+        const response = await fetch(`${API_URL}/chatbots/${currentChatbot.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
-            id: currentChatbot.id,
-            name: currentChatbot.name,
-            industry: currentChatbot.industry,
-            description: currentChatbot.description,
-            flow: flow,
-            isPublished: false
+            flow_data: flow,
+            is_published: false
           })
         });
+        if (!response.ok) {
+          const data = await response.json();
+          console.error('Save failed:', data.error);
+        }
       } catch (e) {
-        console.log('Save to DB failed, using local only');
+        console.log('Save to DB failed, using local only', e);
       }
     }
     
@@ -390,24 +393,25 @@ export default function FlowBuilder() {
     const flow = { nodes: nodes as Node[], edges: edges as Edge[] };
     setFlowData(flow as any);
     
-    // Save and publish to database
     if (currentChatbot?.id) {
-      const API_URL = import.meta.env.VITE_API_URL;
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const token = localStorage.getItem('token');
       try {
-        await fetch(`${API_URL}/api/chatbots`, {
+        const response = await fetch(`${API_URL}/chatbots/${currentChatbot.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
-            id: currentChatbot.id,
-            name: currentChatbot.name,
-            industry: currentChatbot.industry,
-            description: currentChatbot.description,
-            flow: flow,
-            isPublished: true
+            flow_data: flow,
+            is_published: true
           })
         });
-        
-        publishToStore(currentChatbot.id);
+        if (!response.ok) {
+          const data = await response.json();
+          console.error('Publish failed:', data.error);
+        }
         alert('Bot published successfully!');
       } catch (e) {
         console.log('Publish to DB failed, using local only');

@@ -61,39 +61,50 @@ export const paginate = async <T>(
 // ==================== USER OPERATIONS ====================
 export const createUser = async (email: string, passwordHash: string, displayName: string) => {
   const result = await query(
-    'INSERT INTO users(email, password_hash, display_name) VALUES($1, $2, $3) RETURNING *',
+    'INSERT INTO profiles(email, password_hash, display_name, is_active, email_verified) VALUES($1, $2, $3, true, true) RETURNING *',
     [email, passwordHash, displayName]
   );
   return result.rows[0];
 };
 
 export const getUserByEmail = async (email: string) => {
-  const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+  const result = await query('SELECT * FROM profiles WHERE email = $1', [email]);
   return result.rows[0];
 };
 
 export const getUserById = async (id: string) => {
-  const result = await query('SELECT id, email, display_name, role, is_active, subscription_tier, created_at FROM users WHERE id = $1', [id]);
+  const result = await query(
+    'SELECT id, email, display_name, role, is_active, subscription_tier, created_at FROM profiles WHERE id = $1',
+    [id]
+  );
   return result.rows[0];
 };
 
 export const updateUser = async (id: string, data: Record<string, unknown>) => {
   const keys = Object.keys(data);
   if (keys.length === 0) {
-    const result = await query('SELECT * FROM users WHERE id = $1', [id]);
+    const result = await query('SELECT * FROM profiles WHERE id = $1', [id]);
     return result.rows[0];
   }
   const fields = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
   const values = [id, ...Object.values(data)];
-  const result = await query(`UPDATE users SET ${fields}, updated_at = NOW() WHERE id = $1 RETURNING *`, values);
+  const result = await query(`UPDATE profiles SET ${fields}, updated_at = NOW() WHERE id = $1 RETURNING *`, values);
   return result.rows[0];
 };
 
 // ==================== CHATBOT OPERATIONS ====================
-export const createChatbot = async (userId: string, name: string, industry: string) => {
+export const createChatbot = async (
+  userId: string,
+  name: string,
+  industry: string,
+  description?: string,
+  tone?: string,
+  flowData?: unknown
+) => {
   const result = await query(
-    'INSERT INTO chatbots(user_id, name, industry) VALUES($1, $2, $3) RETURNING *',
-    [userId, name, industry]
+    `INSERT INTO chatbots(user_id, name, industry, description, tone, flow_data)
+     VALUES($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [userId, name, industry, description || '', tone || 'friendly', flowData ? JSON.stringify(flowData) : '{}']
   );
   return result.rows[0];
 };
@@ -265,7 +276,7 @@ export const getRecentMessagesForConversation = async (
 // ==================== ANALYTICS ====================
 export const getDashboardStats = async () => {
   const [users, chatbots, payments, leads, bookings] = await Promise.all([
-    query('SELECT COUNT(*) as total, COUNT(CASE WHEN is_active THEN 1 END) as active FROM users'),
+    query('SELECT COUNT(*) as total, COUNT(CASE WHEN is_active THEN 1 END) as active FROM profiles'),
     query('SELECT COUNT(*) as total, COUNT(CASE WHEN is_published THEN 1 END) as published FROM chatbots'),
     query("SELECT COUNT(*) as total, COALESCE(SUM(amount), 0) as revenue FROM payments WHERE status = 'completed'"),
     query("SELECT COUNT(*) as total, COUNT(CASE WHEN status = 'new' THEN 1 END) as new_leads FROM leads"),
@@ -376,7 +387,7 @@ export const getChatbotAnalytics = async (
 
 // ==================== SEARCH ====================
 export const searchUsers = async (search: string, page = 1, limit = 20) => {
-  return paginate('users', 'email ILIKE $1', page, limit, 'created_at DESC', [`%${search}%`]);
+  return paginate('profiles', 'email ILIKE $1', page, limit, 'created_at DESC', [`%${search}%`]);
 };
 
 export const searchChatbots = async (search: string, page = 1, limit = 20) => {

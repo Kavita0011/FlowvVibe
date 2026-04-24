@@ -5,59 +5,73 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-function sanitizeInput(input) {
+function sanitizeInput(input: any) {
   if (typeof input !== 'string') return input;
   return input.trim().slice(0, 10000);
 }
 
-function getToken() {
+function getToken(): string | null {
   const token = localStorage.getItem('token');
   if (!token) return null;
-  
+
   try {
-    const payload = JSON.parse(atob(token));
-    if (payload.exp && Date.now() > payload.exp) {
+    // Token format from worker: "base64(payload).hmacSig"
+    // Token format from Express JWT: "header.payload.sig" (3 parts)
+    const parts = token.split('.');
+    // Worker token has 2 parts, JWT has 3
+    const payloadPart = parts.length === 3 ? parts[1] : parts[0];
+    const payload = JSON.parse(atob(payloadPart));
+    const expiry = payload.exp;
+    // Worker uses milliseconds timestamp, JWT uses seconds
+    const isExpired = expiry
+      ? expiry > 1e12
+        ? Date.now() > expiry          // worker ms
+        : Date.now() > expiry * 1000   // JWT seconds
+      : false;
+    if (isExpired) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       return null;
     }
   } catch {
+    // Token is not parseable — clear it
     localStorage.removeItem('token');
     return null;
   }
-  
+
   return token;
 }
 
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
   const token = getToken();
-  
-  const headers = {
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers as Record<string, string> || {}),
   };
 
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  let data: any;
   try {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Request failed');
-    }
-
-    return data;
-  } catch (err) {
-    throw new Error(err.message);
+    data = await response.json();
+  } catch {
+    throw new Error('Invalid response from server');
   }
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed (${response.status})`);
+  }
+
+  return data;
 }
 
-async function apiRequestWithBody(endpoint, data) {
-  const sanitizedData = {};
+async function apiRequestWithBody(endpoint: string, data: Record<string, any>) {
+  const sanitizedData: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
     sanitizedData[sanitizeInput(key)] = typeof value === 'string' ? sanitizeInput(value) : value;
   }
@@ -66,31 +80,38 @@ async function apiRequestWithBody(endpoint, data) {
 
 // Auth API
 export const auth = {
-  login: (email, password) => {
-    const sanitizedEmail = sanitizeInput(email);
-    const sanitizedPassword = sanitizeInput(password);
-    return apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword }) });
-  },
+  login: (email: string, password: string) =>
+    apiRequest('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: sanitizeInput(email), password: sanitizeInput(password) }),
+    }),
 
-  register: (email, password, displayName) => {
-    const sanitizedEmail = sanitizeInput(email);
-    const sanitizedPassword = sanitizeInput(password);
-    const sanitizedName = sanitizeInput(displayName);
-    return apiRequest('/auth/register', { method: 'POST', body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword, displayName: sanitizedName }) });
-  },
+  register: (email: string, password: string, displayName: string) =>
+    apiRequest('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: sanitizeInput(email),
+        password: sanitizeInput(password),
+        displayName: sanitizeInput(displayName),
+      }),
+    }),
 
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('isAuthenticated');
   },
 
-  forgotPassword: (email) => {
-    return apiRequest('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
-  },
+  forgotPassword: (email: string) =>
+    apiRequest('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
 
-  resetPassword: (email, token, newPassword) => {
-    return apiRequest('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, token, newPassword }) });
-  },
+  resetPassword: (email: string, token: string, newPassword: string) =>
+    apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, token, newPassword }),
+    }),
+
+  verify: () => apiRequest('/auth/verify'),
 };
 
 // Pricing API
@@ -100,40 +121,40 @@ export const pricing = {
 };
 
 // Chatbots API
-export const chatbots = {
+export const chatbotsApi = {
   getAll: () => apiRequest('/chatbots'),
-
-  create: (data) => apiRequest('/chatbots', { method: 'POST', body: JSON.stringify(data) }),
-
-  update: (data) => apiRequest('/chatbots', { method: 'PUT', body: JSON.stringify(data) }),
-
-  delete: (id) => apiRequest('/chatbots', { method: 'DELETE', body: JSON.stringify({ id }) }),
+  getById: (id: string) => apiRequest(`/chatbots/${id}`),
+  create: (data: any) => apiRequest('/chatbots', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) =>
+    apiRequest(`/chatbots/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiRequest(`/chatbots/${id}`, { method: 'DELETE' }),
 };
 
 // Payments API
 export const payments = {
-  create: (data) => apiRequest('/payments', { method: 'POST', body: JSON.stringify(data) }),
-
+  create: (data: any) => apiRequest('/payments', { method: 'POST', body: JSON.stringify(data) }),
   getAll: () => apiRequest('/payments'),
-
   getMy: () => apiRequest('/payments'),
-
-  update: (data) => apiRequest('/payments/update', { method: 'PUT', body: JSON.stringify(data) }),
+  update: (data: any) =>
+    apiRequest('/payments/update', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
-// User API
-export const user = {
+// User/Profile API
+export const profile = {
   get: () => apiRequest('/profile'),
-  update: (data) => apiRequestWithBody('/profile', data),
+  update: (data: any) => apiRequest('/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  updatePassword: (newPassword: string) =>
+    apiRequest('/profile/password', { method: 'PUT', body: JSON.stringify({ password: newPassword }) }),
+  delete: () => apiRequest('/profile', { method: 'DELETE' }),
 };
 
 // Subscriptions API
 export const subscriptions = {
   get: () => apiRequest('/subscription'),
-  create: (data) => apiRequestWithBody('/subscription', data),
+  create: (data: any) => apiRequestWithBody('/subscription', data),
 };
 
-// Tier Info API (for channel access check)
+// Tier Info API
 export const tier = {
   getInfo: () => apiRequest('/tier-info'),
 };
@@ -141,7 +162,7 @@ export const tier = {
 // Health check
 export const health = () => apiRequest('/health');
 
-// PRD Download (free, no auth)
+// PRD API
 export const prd = {
   getInfo: () => apiRequest('/prd/info'),
   download: async () => {
@@ -158,61 +179,52 @@ export const prd = {
   },
 };
 
-// Admin API (for admin pages)
+// PRD Builder API
+export const prds = {
+  getAll: () => apiRequest('/prds'),
+  get: (id: string) => apiRequest(`/prds/${id}`),
+  create: (data: any) => apiRequest('/prds', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) => apiRequest(`/prds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiRequest(`/prds/${id}`, { method: 'DELETE' }),
+};
+
+// Admin API
 export const admin = {
-  // Payments
-  getPayments: (status) => apiRequest(status ? `/admin/payments?status=${status}` : '/admin/payments'),
-  updatePayment: (data) => apiRequest('/admin/payments/update', { method: 'POST', body: JSON.stringify(data) }),
-  approvePayment: (data) => apiRequest('/admin/payments/approve', { method: 'POST', body: JSON.stringify(data) }),
-  rejectPayment: (data) => apiRequest('/admin/payments/reject', { method: 'POST', body: JSON.stringify(data) }),
-  setPaymentProcessing: (data) => apiRequest('/admin/payments/processing', { method: 'POST', body: JSON.stringify(data) }),
-
-  // Users
+  getPayments: (status?: string) =>
+    apiRequest(status ? `/admin/payments?status=${status}` : '/admin/payments'),
+  updatePayment: (data: any) =>
+    apiRequest('/admin/payments/update', { method: 'POST', body: JSON.stringify(data) }),
+  approvePayment: (data: any) =>
+    apiRequest('/admin/payments/approve', { method: 'POST', body: JSON.stringify(data) }),
+  rejectPayment: (data: any) =>
+    apiRequest('/admin/payments/reject', { method: 'POST', body: JSON.stringify(data) }),
   getUsers: () => apiRequest('/admin/users'),
-  updateUser: (data) => apiRequest('/admin/users/update', { method: 'POST', body: JSON.stringify(data) }),
-  deleteUser: (userId) => apiRequest('/admin/users/delete', { method: 'POST', body: JSON.stringify({ userId }) }),
-  impersonateUser: (userId) => apiRequest('/admin/users/impersonate', { method: 'POST', body: JSON.stringify({ userId }) }),
-
-  // Chatbots
-  getChatbots: (status) => apiRequest(status ? `/admin/chatbots?status=${status}` : '/admin/chatbots'),
-  deleteChatbot: (chatbotId) => apiRequest('/admin/chatbots', { method: 'DELETE', body: JSON.stringify({ chatbotId }) }),
-  approveChatbot: (data) => apiRequest('/admin/chatbots/approve', { method: 'POST', body: JSON.stringify(data) }),
-  rejectChatbot: (data) => apiRequest('/admin/chatbots/reject', { method: 'POST', body: JSON.stringify(data) }),
-
-  // Leads
+  updateUser: (data: any) =>
+    apiRequest('/admin/users/update', { method: 'POST', body: JSON.stringify(data) }),
+  deleteUser: (userId: string) =>
+    apiRequest('/admin/users/delete', { method: 'POST', body: JSON.stringify({ userId }) }),
+  getChatbots: (status?: string) =>
+    apiRequest(status ? `/admin/chatbots?status=${status}` : '/admin/chatbots'),
+  deleteChatbot: (chatbotId: string) =>
+    apiRequest('/admin/chatbots', { method: 'DELETE', body: JSON.stringify({ chatbotId }) }),
   getLeads: () => apiRequest('/admin/leads'),
-  updateLead: (data) => apiRequest('/admin/leads/update', { method: 'POST', body: JSON.stringify(data) }),
-  deleteLead: (leadId) => apiRequest('/admin/leads', { method: 'DELETE', body: JSON.stringify({ leadId }) }),
-
-  // Settings
+  updateLead: (data: any) =>
+    apiRequest('/admin/leads/update', { method: 'POST', body: JSON.stringify(data) }),
+  deleteLead: (leadId: string) =>
+    apiRequest('/admin/leads', { method: 'DELETE', body: JSON.stringify({ leadId }) }),
   getSettings: () => apiRequest('/admin/settings'),
-  saveSettings: (data) => apiRequest('/admin/settings', { method: 'POST', body: JSON.stringify(data) }),
-  savePricingPlan: (data) => apiRequest('/admin/pricing', { method: 'POST', body: JSON.stringify(data) }),
-  updateSubscription: (data) => apiRequest('/admin/subscriptions/update', { method: 'POST', body: JSON.stringify(data) }),
-
-  // Analytics & Exports
+  saveSettings: (data: any) =>
+    apiRequest('/admin/settings', { method: 'POST', body: JSON.stringify(data) }),
+  savePricingPlan: (data: any) =>
+    apiRequest('/admin/pricing', { method: 'POST', body: JSON.stringify(data) }),
+  updateSubscription: (data: any) =>
+    apiRequest('/admin/subscriptions/update', { method: 'POST', body: JSON.stringify(data) }),
   getAnalytics: () => apiRequest('/admin/analytics'),
   getRevenueStats: () => apiRequest('/admin/stats/revenue'),
   getUserStats: () => apiRequest('/admin/stats/users'),
   exportChatbots: (format = 'json') => apiRequest(`/admin/export/chatbots?format=${format}`),
   exportUsers: (format = 'json') => apiRequest(`/admin/export/users?format=${format}`),
   exportPayments: (format = 'json') => apiRequest(`/admin/export/payments?format=${format}`),
-};
-
-// User profile & account
-export const profile = {
-  update: (data) => apiRequest('/profile', { method: 'PUT', body: JSON.stringify(data) }),
-  updatePassword: (newPassword) => apiRequest('/profile/password', { method: 'PUT', body: JSON.stringify({ password: newPassword }) }),
-  delete: () => apiRequest('/profile', { method: 'DELETE' }),
-};
-
-// PRD Builder API
-export const prds = {
-  getAll: () => apiRequest('/prds'),
-  get: (id) => apiRequest(`/prds/${id}`),
-  create: (data) => apiRequest('/prds', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id, data) => apiRequest(`/prds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id) => apiRequest(`/prds/${id}`, { method: 'DELETE' }),
 };
 
 export default apiRequest;

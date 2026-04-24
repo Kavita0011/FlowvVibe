@@ -96,8 +96,11 @@ router.get('/chatbots/:id', auth, async (req, res) => {
 
 router.post('/chatbots', auth, async (req, res) => {
   try {
-    const { name, industry, description, tone } = req.body;
-    const bot = await createChatbot(req.user.userId, name, industry);
+    const { name, industry, description, tone, flow_data } = req.body;
+    if (!name || !industry) {
+      return res.status(400).json({ error: 'name and industry are required' });
+    }
+    const bot = await createChatbot(req.user.userId, name, industry, description, tone, flow_data);
     res.json(bot);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create chatbot' });
@@ -106,8 +109,14 @@ router.post('/chatbots', auth, async (req, res) => {
 
 router.put('/chatbots/:id', auth, async (req, res) => {
   try {
-    const bot = await updateChatbot(req.params.id, req.body);
-    res.json(bot);
+    const bot = await getChatbotById(req.params.id);
+    if (!bot) return res.status(404).json({ error: 'Not found' });
+    // Ownership check
+    if (req.user.role !== 'admin' && bot.user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const updated = await updateChatbot(req.params.id, req.body);
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update chatbot' });
   }
@@ -115,6 +124,12 @@ router.put('/chatbots/:id', auth, async (req, res) => {
 
 router.delete('/chatbots/:id', auth, async (req, res) => {
   try {
+    const bot = await getChatbotById(req.params.id);
+    if (!bot) return res.status(404).json({ error: 'Not found' });
+    // Ownership check
+    if (req.user.role !== 'admin' && bot.user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     await deleteChatbot(req.params.id);
     res.json({ success: true });
   } catch (error) {

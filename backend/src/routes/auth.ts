@@ -16,42 +16,54 @@ function resolveJwtSecret(): string {
 
 export const JWT_SECRET = resolveJwtSecret();
 
-interface User {
-  id: string;
-  email: string;
-  password_hash: string;
-  display_name: string;
-  role: string;
-  is_active: boolean;
-  subscription_tier: string;
+// Input validation helpers
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 255;
+}
+
+function isStrongPassword(password: string): boolean {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 128;
 }
 
 // Register
 router.post('/register', async (req, res) => {
   try {
     const { email, password, displayName } = req.body;
-    
-    // Check if user exists
-    const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: 'Password must be 8–128 characters' });
+    }
+
+    const existing = await query('SELECT id FROM profiles WHERE email = $1', [email]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
+    const name = (displayName || email.split('@')[0]).slice(0, 100);
 
-    // Create user
     const result = await query(
-      'INSERT INTO users(email, password_hash, display_name, role) VALUES($1, $2, $3, $4) RETURNING *',
-      [email, passwordHash, displayName || email.split('@')[0], 'user']
+      `INSERT INTO profiles(email, password_hash, display_name, role, is_active, email_verified)
+       VALUES($1, $2, $3, $4, true, true) RETURNING *`,
+      [email.toLowerCase().trim(), passwordHash, name, 'user']
     );
-    
+
     const user = result.rows[0];
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
       token,
-      user: { id: user.id, email: user.email, displayName: user.display_name, role: user.role }
+      user: { id: user.id, email: user.email, displayName: user.display_name, role: user.role },
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -61,54 +73,54 @@ router.post('/register', async (req, res) => {
 
 // Login
 router.post('/login', async (req, res) => {
-  const clientIP = req.ip || req.socket.remoteAddress || 'unknown';
-  console.log(`Login attempt from ${clientIP} for ${req.body.email}`);
-  
   try {
     const { email, password } = req.body;
-    
-    // Find user
-    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const result = await query('SELECT * FROM profiles WHERE email = $1', [email.toLowerCase().trim()]);
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
 
-    // Check password
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check if active
     if (!user.is_active) {
-      return res.status(403).json({ error: 'Account blocked' });
+      return res.status(403).json({ error: 'Account is inactive' });
     }
 
-    // Update last login
-    await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    await query('UPDATE profiles SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    // Set HttpOnly cookie for token
     res.cookie('flowvibe_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
 
     res.json({
       token,
-      user: { 
-        id: user.id, 
-        email: user.email, 
-        displayName: user.display_name, 
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.display_name,
         role: user.role,
-        subscriptionTier: user.subscription_tier
-      }
+        subscriptionTier: user.subscription_tier,
+      },
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -120,28 +132,29 @@ router.post('/login', async (req, res) => {
 router.get('/verify', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'No token' });
-    }
+    if (!token) return res.status(401).json({ error: 'No token' });
 
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    const result = await query('SELECT id, email, display_name, role, subscription_tier FROM users WHERE id = $1', [decoded.userId]);
-    
+    const result = await query(
+      'SELECT id, email, display_name, role, subscription_tier FROM profiles WHERE id = $1',
+      [decoded.userId]
+    );
+
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'User not found' });
     }
 
     const user = result.rows[0];
     res.json({
-      user: { 
-        id: user.id, 
-        email: user.email, 
-        displayName: user.display_name, 
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.display_name,
         role: user.role,
-        subscriptionTier: user.subscription_tier
-      }
+        subscriptionTier: user.subscription_tier,
+      },
     });
-  } catch (error) {
+  } catch {
     res.status(401).json({ error: 'Invalid token' });
   }
 });

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { fetchLeadsByChatbot, updateLeadStatus, deleteLead } from '../lib/crud';
 import toast from 'react-hot-toast';
-import { chatbots, subscriptions, pricing } from '../lib/api';
+import { chatbotsApi, subscriptions, pricing, profile as profileApi, admin } from '../lib/api';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function UserDashboard() {
     user, 
     logout, 
     payments, 
-    chatbots, 
+    chatbots: storeChatbots, 
     setPRD, 
     setCurrentChatbot,
     getUserBots,
@@ -62,7 +62,7 @@ export default function UserDashboard() {
   const handleSaveProfile = async () => {
     setProfileLoading(true);
     try {
-      await profile.update({
+      await profileApi.update({
         displayName: user.displayName,
         companyName: profile.companyName,
         location: profile.location
@@ -86,7 +86,7 @@ export default function UserDashboard() {
     }
     setPasswordLoading(true);
     try {
-      await profile.updatePassword(passwords.newPass);
+      await profileApi.updatePassword(passwords.newPass);
       toast.success('Password updated successfully!');
       setPasswords({ current: '', newPass: '' });
     } catch (err: any) {
@@ -104,7 +104,7 @@ export default function UserDashboard() {
       return;
     }
     try {
-      await profile.delete();
+      await profileApi.delete();
       logout();
       navigate('/');
       toast.success('Account marked for deletion');
@@ -123,7 +123,7 @@ export default function UserDashboard() {
       setLoading(true);
       try {
         // Fetch user's chatbots from backend API (Neon)
-        const botsData = await chatbots.getAll();
+        const botsData = await chatbotsApi.getAll();
         const myBots = botsData?.filter(b => b.user_id === user.id) || [];
         setDbChatbots(myBots);
 
@@ -177,7 +177,7 @@ export default function UserDashboard() {
   }, [user?.id]);
 
   const userPayments = dbPayments.length > 0 ? dbPayments : payments.filter(p => p.userId === user?.id);
-  const userChatbots = dbChatbots.length > 0 ? dbChatbots : chatbots.filter(c => c.userId === user?.id);
+  const userChatbots = dbChatbots.length > 0 ? dbChatbots : storeChatbots.filter(c => c.userId === user?.id);
   
   // Calculate totals from real data
   const totalSpent = dbPayments.reduce((acc, p) => acc + (p.amount || 0), 0);

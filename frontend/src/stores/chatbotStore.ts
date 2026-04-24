@@ -184,24 +184,52 @@ export const useChatbotStore = create<ChatbotState>()(
       login: async (email, password) => {
         set({ isLoading: true, error: null });
         
-        // Admin login via env vars (secure)
-        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-        const adminPass = import.meta.env.VITE_ADMIN_PASSWORD;
-        
-        if (adminEmail && adminPass && email === adminEmail && password === adminPass) {
-          const adminUser: User = { id: 'admin_001', email: adminEmail, displayName: 'Admin', role: 'admin', isActive: true, createdAt: new Date() };
-          set({ user: adminUser, isAdmin: true, isAuthenticated: true, isLoading: false, users: DEMO_USERS, payments: DEMO_PAYMENTS });
-          return true;
+        try {
+          // Try real backend first
+          const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok && data.token && data.user) {
+            const user: User = {
+              id: data.user.id,
+              email: data.user.email,
+              displayName: data.user.displayName,
+              role: data.user.role || 'user',
+              isActive: true,
+              createdAt: new Date(),
+              subscription: { tier: data.user.subscriptionTier || 'free', status: 'active', expiresAt: new Date(Date.now() + 30*24*60*60*1000) }
+            };
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(user));
+            set({ user, isAdmin: user.role === 'admin', isAuthenticated: true, isLoading: false });
+            return true;
+          }
+          
+          // Fallback: demo auth if backend unreachable
+          const demoUser = DEMO_USERS.find(u => u.email === email);
+          if (demoUser) {
+            set({ user: demoUser, isAdmin: false, isAuthenticated: true, isLoading: false, chatbots: DEMO_CHATBOTS });
+            return true;
+          }
+          
+          set({ error: data.error || 'Invalid credentials', isLoading: false });
+          return false;
+        } catch (err: any) {
+          console.error('Login error:', err);
+          // Fallback to demo
+          const demoUser = DEMO_USERS.find(u => u.email === email);
+          if (demoUser) {
+            set({ user: demoUser, isAdmin: false, isAuthenticated: true, isLoading: false, chatbots: DEMO_CHATBOTS });
+            return true;
+          }
+          set({ error: 'Login failed', isLoading: false });
+          return false;
         }
-        
-        const demoUser = DEMO_USERS.find(u => u.email === email);
-        if (demoUser) {
-          set({ user: demoUser, isAdmin: false, isAuthenticated: true, isLoading: false, chatbots: DEMO_CHATBOTS });
-          return true;
-        }
-        
-        set({ error: 'Invalid credentials', isLoading: false });
-        return false;
       },
       
       loginWithAdmin: async () => false,
@@ -215,7 +243,6 @@ export const useChatbotStore = create<ChatbotState>()(
       register: async (email, password, displayName) => {
         set({ isLoading: true, error: null });
         
-        // Rate limiting check
         const rateCheck = globalRateLimiter.canProceed(`register_${email}`);
         if (!rateCheck.allowed) {
           const minutes = Math.ceil((rateCheck.resetTime! - Date.now()) / 60000);
@@ -223,75 +250,67 @@ export const useChatbotStore = create<ChatbotState>()(
           return false;
         }
         
-        // Validate email
         const emailValidation = validateEmail(email);
         if (!emailValidation.isValid) {
           set({ error: emailValidation.error, isLoading: false });
           return false;
         }
         
-        // Validate password
         const passwordValidation = validatePassword(password);
         if (!passwordValidation.isValid) {
           set({ error: passwordValidation.error, isLoading: false });
           return false;
         }
         
-        // Validate display name
         const nameValidation = validateBotName(displayName);
         if (!nameValidation.isValid) {
           set({ error: 'Please enter a valid display name (2-100 characters)', isLoading: false });
           return false;
         }
         
-        // Sanitize inputs
         const sanitizedEmail = emailValidation.sanitized!;
         const sanitizedName = sanitizeInput(displayName).trim();
         
-        // Check if email already exists
         const existingUser = get().users.find(u => u.email.toLowerCase() === sanitizedEmail.toLowerCase());
         if (existingUser) {
           set({ error: 'Email already registered', isLoading: false });
           return false;
         }
         
-        // Record rate limit attempt
         globalRateLimiter.recordAttempt(`register_${email}`);
         
-        // If Supabase is configured, use it
-        if (isSupabaseConfigured() && supabase) {
-          const { data, error } = await signUp(sanitizedEmail, password, { display_name: sanitizedName });
-          if (error) {
-            set({ error: error.message, isLoading: false });
-            return false;
-          }
-          if (data?.user) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: sanitizedEmail, password, displayName: sanitizedName }),
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok && data.token && data.user) {
             const newUser: User = {
               id: data.user.id,
-              email: sanitizedEmail,
-              displayName: sanitizedName,
-              role: 'user',
+              email: data.user.email,
+              displayName: data.user.displayName,
+              role: data.user.role || 'user',
               isActive: true,
-              createdAt: new Date(data.user.created_at || Date.now()),
+              createdAt: new Date(),
               subscription: { tier: 'free', status: 'active', expiresAt: new Date(Date.now() + 30*24*60*60*1000) }
             };
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(newUser));
             set(state => ({ users: [...state.users, newUser], user: newUser, isAuthenticated: true, isLoading: false }));
             return true;
           }
+          
+          set({ error: data.error || 'Registration failed', isLoading: false });
+          return false;
+        } catch (err: any) {
+          console.error('Register error:', err);
+          set({ error: 'Registration failed', isLoading: false });
+          return false;
         }
-        
-        // Fallback: Create locally
-        const newUser: User = { 
-          id: `user_${Date.now()}`, 
-          email: sanitizedEmail, 
-          displayName: sanitizedName, 
-          role: 'user', 
-          isActive: true, 
-          createdAt: new Date(), 
-          subscription: { tier: 'free', status: 'active', expiresAt: new Date(Date.now() + 30*24*60*60*1000) } 
-        };
-        set(state => ({ users: [...state.users, newUser], user: newUser, isAuthenticated: true, isLoading: false }));
-        return true;
       },
       
       setUser: (user) => set({ user, isAdmin: user?.role === 'admin' }),
