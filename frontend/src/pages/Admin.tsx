@@ -331,8 +331,15 @@ export default function Admin() {
 
   // Payment CRUD
   const handleApprovePayment = async (paymentId: string) => {
+    const payment = dbPayments.find(p => p.id === paymentId);
+    if (!payment) return;
     try {
-      await admin.approvePayment({ paymentId });
+      await admin.approvePayment({
+        paymentId,
+        userId: payment.user_id,
+        plan: 'pro',
+        amount: payment.amount
+      });
       setDbPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'completed' } : p));
     } catch (err) {
       console.error('Error approving payment:', err);
@@ -354,6 +361,15 @@ export default function Admin() {
       setDbPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'processing' } : p));
     } catch (err) {
       console.error('Error setting payment processing:', err);
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (paymentId: string, status: string) => {
+    try {
+      await admin.updatePayment({ paymentId, status });
+      setDbPayments(prev => prev.map(p => p.id === paymentId ? { ...p, status } : p));
+    } catch (err) {
+      console.error('Error updating payment:', err);
     }
   };
 
