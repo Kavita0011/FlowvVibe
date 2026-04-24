@@ -3,8 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "npm run dev --prefix frontend",
-    "build": "cd frontend && npm ci && npm run build",
-    "deploy": "npm run build && cd backend && npx wrangler deploy"
-  }
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm install && npm run build",
+    "deploy": "cd backend && wrangler deploy"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}
 }
