@@ -12,9 +12,7 @@ const features = [
   { icon: Bot, title: 'Smart AI', desc: 'Natural conversations with intent detection' },
   { icon: MessageSquare, title: 'Visual Builder', desc: 'Drag-drop flow design' },
   { icon: Globe, title: 'Multi-Channel', desc: 'Website, WhatsApp, Telegram & more' },
-  { icon: Zap, title: 'Auto Learning', desc: 'Improves from feedback' },
-  { icon: Mail, title: 'Email Automation', desc: 'Smart auto-replies' },
-  { icon: CreditCard, title: 'Easy Payments', desc: 'UPI & bank transfer' }
+  { icon: Zap, title: 'Auto Learning', desc: 'Improves from feedback' }
 ];
 
 const pricingPlans = [
