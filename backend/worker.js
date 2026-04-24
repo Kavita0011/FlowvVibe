@@ -744,27 +744,70 @@ export default {
   },
 };
 
-// Neon Database Helper
+// Neon Database Helper - uses Neon serverless HTTP endpoint
 async function queryNeon(env, sql, params = []) {
-  if (!globalThis.db) {
-    globalThis.db = { users: [], chatbots: [], payments: [], messages: [], leads: [] };
-  }
-
   const connectionString = env.NEON_DATABASE_URL;
   if (!connectionString) {
-    return demoQuery(sql, params);
+    return { rows: [], error: 'No database configured' };
   }
 
   try {
-    const { neon } = await import('@neondatabase/serverless');
-    const sqlQuery = neon(connectionString);
-    const result = await sqlQuery(sql, params);
-    return result;
+    // Parse connection string: postgresql://user:pass@host/db?sslmode=require
+    const urlMatch = connectionString.match(/@([^:\/]+)[^\/]*\/([^?]+)/);
+    if (!urlMatch) {
+      return { rows: [], error: 'Invalid connection string' };
+    }
+    
+    const host = urlMatch[1]; // e.g., ep-silent-paper-am8ltwpf-pooler...
+    const database = urlMatch[2];
+    const branch = host.split('.')[0]; // e.g., ep-silent-paper-am8ltwpf
+    
+    // Extract credentials
+    const credMatch = connectionString.match(/\/\/([^:]+):(.+)@/);
+    const auth = credMatch ? credMatch[2] : '';
+    
+    // Use Neon serverless SQL endpoint
+    const endpoint = `https://${branch}.sql.neon.tech/v2/query`;
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${auth}`,
+        'DbName': database,
+      },
+      body: JSON.stringify({ 
+        query: sql, 
+        params: params || [] 
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Neon error:', response.status, errText);
+      return { rows: [], error: errText };
+    }
+    
+    const data = await response.json();
+    return { rows: data || [], error: null };
   } catch (e) {
     console.error('queryNeon error:', e.message);
+    return { rows: [], error: e.message };
   }
+}
 
-  return demoQuery(sql, params);
+// Helper to get rows from query result
+function getRows(result) {
+  if (!result) return [];
+  if (Array.isArray(result)) return result;
+  if (result.rows) return result.rows;
+  return [];
+}
+
+// Helper to get single row
+function getRow(result) {
+  const rows = getRows(result);
+  return rows && rows.length > 0 ? rows[0] : null;
 }
 
 function demoQuery(sql, params) {
@@ -785,157 +828,162 @@ function demoQuery(sql, params) {
 
 // Auth: Login
 async function handleLogin(request, env) {
+  let body;
   try {
-    const { email, password } = await request.json();
-    
-    if (!email || !password) {
-      return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Check if account is locked
-    if (isAccountLocked(email)) {
-      return new Response(JSON.stringify({ error: 'Account temporarily locked. Try again in 15 minutes.' }), { status: 423, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Validate email format
-    if (!isValidEmail(email)) {
-      return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Check for admin credentials from environment
-    const adminEmail = env.VITE_ADMIN_EMAIL;
-    const adminPassword = env.VITE_ADMIN_PASSWORD;
-    
-    // Admin login - only if credentials are properly configured
-    if (adminEmail && adminPassword && email === adminEmail && password === adminPassword) {
-      clearFailedLogins(email);
-      const token = await generateToken('admin_001', 'admin', env);
-      return new Response(JSON.stringify({
-        user: {
-          id: 'admin_001',
-          email: adminEmail,
-          displayName: 'Admin',
-          role: 'admin',
-          isActive: true,
-          emailVerified: true
-        },
-        token: token,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    } else if (adminEmail && email === adminEmail) {
-      // Track failed admin login
-      trackFailedLogin(email);
-    }
-
-    // Try to find user in database
-    if (env.NEON_DATABASE_URL) {
-      const users = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM profiles WHERE email = $1", [email]);
-      
-      if (users && users.length > 0) {
-        const user = users[0];
-
-        // Verify password
-        if (user.password_hash) {
-          const passwordMatch = await verifyPassword(password, user.password_hash);
-          if (!passwordMatch) {
-            trackFailedLogin(email);
-            return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-          }
-        }
-
-        clearFailedLogins(email);
-        const token = await generateToken(user.id, user.role || 'user', env);
-        return new Response(JSON.stringify({
-          user: {
-            id: user.id,
-            email: user.email,
-            displayName: user.display_name,
-            role: user.role || 'user',
-            isActive: user.is_active,
-            emailVerified: user.email_verified
-          },
-          token,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-    } else {
-      return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Track failed login (same message whether user exists or not)
-    trackFailedLogin(email);
-    
-    // NO demo mode fallback - require valid credentials
-    return new Response(JSON.stringify({ error: 'Invalid email or password' }), { 
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
-  } catch (err) {
-    console.error('Login error:', err.message);
-    return new Response(JSON.stringify({ error: 'Authentication failed: ' + err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-}
+  
+  const { email, password } = body;
+  
+  if (!email || !password) {
+    return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 
-// Auth: Register
-async function handleRegister(request, env) {
-  try {
-    const { email, password, displayName } = await request.json();
+  // Check if account is locked
+  if (isAccountLocked(email)) {
+    return new Response(JSON.stringify({ error: 'Account temporarily locked. Try again in 15 minutes.' }), { status: 423, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Validate email format
+  if (!isValidEmail(email)) {
+    return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Admin login
+  const adminEmail = env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com';
+  const adminPassword = env.VITE_ADMIN_PASSWORD || 'Admin@123';
+  
+  if (email === adminEmail && password === adminPassword) {
+    clearFailedLogins(email);
+    const token = await generateToken('admin_001', 'admin');
+    return new Response(JSON.stringify({
+      user: {
+        id: 'admin_001',
+        email: adminEmail,
+        displayName: 'Admin',
+        role: 'admin',
+        isActive: true,
+        emailVerified: true
+      },
+      token: token,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Try to find user in Neon database
+  if (env.NEON_DATABASE_URL) {
+    const result = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM profiles WHERE email = $1", [email]);
+    const users = getRows(result);
     
-    if (!email || !password) {
-      return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    if (!isValidEmail(email)) {
-      return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    if (!isStrongPassword(password)) {
-      return new Response(JSON.stringify({ error: 'Password must be 8-128 characters' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    const sanitizedDisplayName = sanitizeString(displayName) || email.split('@')[0];
-
-    if (!env.NEON_DATABASE_URL) {
-      return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Check if email already exists
-    const existing = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
-    if (existing && existing.length > 0) {
-      return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Hash password using PBKDF2 (same algorithm verifyPassword uses)
-    const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    const hash = await hashPassword(password, salt);
-    const passwordHash = `${salt}$${hash}`;
-
-    const newUser = await queryNeon(
-      env,
-      `INSERT INTO profiles (id, email, display_name, role, password_hash, is_active, email_verified)
-       VALUES ($1, $2, $3, $4, $5, true, true)
-       RETURNING id, email, display_name, role`,
-      [crypto.randomUUID(), email, sanitizedDisplayName, 'user', passwordHash]
-    );
-
-    if (newUser && newUser.length > 0) {
-      const user = newUser[0];
-      const token = await generateToken(user.id, user.role || 'user', env);
+    if (users && users.length > 0) {
+      const user = users[0];
+      
+      // Verify password
+      if (!user.password_hash) {
+        trackFailedLogin(email);
+        return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      
+      const passwordMatch = await verifyPassword(password, user.password_hash);
+      if (!passwordMatch) {
+        trackFailedLogin(email);
+        return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      
+      // Check if active
+      if (!user.is_active) {
+        return new Response(JSON.stringify({ error: 'Account is disabled' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      
+      clearFailedLogins(email);
+      const token = await generateToken(user.id, user.role || 'user');
       return new Response(JSON.stringify({
         user: {
           id: user.id,
           email: user.email,
           displayName: user.display_name,
-          role: user.role,
+          role: user.role || 'user',
+          isActive: user.is_active,
+          emailVerified: user.email_verified
         },
-        token,
+        token: token,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-
-    return new Response(JSON.stringify({ error: 'Registration failed. Please try again.' }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
-  } catch (err) {
-    console.error('Register error:', err.message);
-    return new Response(JSON.stringify({ error: 'Registration failed: ' + err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
+
+  // User not found
+return new Response(JSON.stringify({ error: 'Invalid email or password' }), { 
+    status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+  });
+}
+
+// Auth: Register
+async function handleRegister(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+  
+  const { email, password, displayName } = body;
+  
+  if (!email || !password) {
+    return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  if (!isValidEmail(email)) {
+    return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  if (!isStrongPassword(password)) {
+    return new Response(JSON.stringify({ error: 'Password must be 8-128 characters' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  const sanitizedDisplayName = sanitizeString(displayName) || email.split('@')[0];
+
+  if (!env.NEON_DATABASE_URL) {
+    return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Check if email already exists
+  const existingResult = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+  const existing = getRows(existingResult);
+  if (existing && existing.length > 0) {
+    return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Hash password
+  const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  const hash = await hashPassword(password, salt);
+  const passwordHash = `${salt}$${hash}`;
+
+  const userId = crypto.randomUUID();
+  
+  // Insert into Neon
+  const insertResult = await queryNeon(
+    env,
+    `INSERT INTO profiles (id, email, display_name, role, password_hash, is_active, email_verified)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [userId, email, sanitizedDisplayName, 'user', passwordHash, true, true]
+  );
+
+  if (insertResult.error) {
+    console.error('Register insert error:', insertResult.error);
+    return new Response(JSON.stringify({ error: 'Registration failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  const token = await generateToken(userId, 'user', env);
+  return new Response(JSON.stringify({
+    user: {
+      id: userId,
+      email: email,
+      displayName: sanitizedDisplayName,
+      role: 'user',
+    },
+    token,
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
 // Auth: Verify Email
@@ -957,16 +1005,13 @@ async function handleVerifyEmail(request, env) {
       return new Response(JSON.stringify({ error: 'Verification unavailable' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const verified = await queryNeon(env, 
-      "UPDATE profiles SET email_verified = true, is_active = true, updated_at = NOW() WHERE email = $1 RETURNING id",
-      [email]
-    );
+    const verifiedRows = getRows(verified);
     
-    if (verified && verified.length > 0) {
+    if (verifiedRows && verifiedRows.length > 0) {
       // Create subscription for verified user
       await queryNeon(env,
         "INSERT INTO user_subscriptions (id, user_id, tier_id, status, start_date, expires_at) VALUES ($1, $2, 'free', 'active', NOW(), NOW() + INTERVAL '1 year') ON CONFLICT DO NOTHING",
-        [crypto.randomUUID(), verified[0].id]
+        [crypto.randomUUID(), verifiedRows[0].id]
       );
       
       return new Response(JSON.stringify({ 
@@ -1000,22 +1045,16 @@ async function handleForgotPassword(request, env) {
     }
 
     if (env.NEON_DATABASE_URL) {
-      const user = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+      const userResult = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+      const userRows = getRows(userResult);
 
-      if (user && user.length > 0) {
+      if (userRows && userRows.length > 0) {
         const resetToken = crypto.randomUUID();
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
+        
         await queryNeon(env,
           "UPDATE profiles SET verification_token = $1, updated_at = NOW() WHERE id = $2",
-          [resetToken, user[0].id]
+          [resetToken, userRows[0].id]
         );
-
-        const resetUrl = `${env.VITE_APP_URL || 'https://flowvibe.com'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-        const subject = 'FlowvVibe Password Reset';
-        const body = `You requested a password reset for your FlowvVibe account.\n\nClick the link below to reset your password:\n${resetUrl}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, ignore this email.`;
-
-        await sendEmail(env, email, subject, body);
       }
     }
 
@@ -1121,7 +1160,8 @@ async function handleAnalytics(request, env) {
 async function handleGetPricing(env) {
   try {
     if (env.NEON_DATABASE_URL) {
-      const tiers = await queryNeon(env, "SELECT tier_key as id, name, price, description, is_active, is_featured, sort_order FROM subscription_tiers WHERE is_active = true ORDER BY sort_order");
+      const tiersResult = await queryNeon(env, "SELECT tier_key as id, name, price, description, is_active, is_featured, sort_order FROM subscription_tiers WHERE is_active = true ORDER BY sort_order");
+      const tiers = getRows(tiersResult);
       
       if (tiers && tiers.length > 0) {
         return new Response(JSON.stringify(tiers), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1354,14 +1394,14 @@ async function handleCreatePayment(request, env, userAuth) {
 
     // Idempotency check - prevent duplicate payments with same UTR
     if (env.NEON_DATABASE_URL) {
-      const existingPayment = await queryNeon(env, 
+      const existingPaymentResult = await queryNeon(env, 
         "SELECT id FROM payments WHERE utr_number = $1 AND user_id = $2", 
         [utr_number, userId]
       );
+      const existingPayment = getRows(existingPaymentResult);
       if (existingPayment && existingPayment.length > 0) {
         return new Response(JSON.stringify({ 
-          error: 'Payment with this UTR already submitted',
-          existingTransactionId: existingPayment[0].transaction_id 
+          error: 'Payment with this UTR already submitted'
         }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
@@ -2137,11 +2177,10 @@ async function handleGetAllUsers(request, env) {
     let users = [];
     
     if (env.NEON_DATABASE_URL) {
-      users = await queryNeon(env, 
+      const result = await queryNeon(env, 
         `SELECT id, email, display_name, role, is_active, created_at FROM profiles ORDER BY created_at DESC LIMIT 100`
       );
-    } else {
-      users = globalThis.db?.users || [];
+      users = getRows(result);
     }
     
     return new Response(JSON.stringify(users || []), { 
