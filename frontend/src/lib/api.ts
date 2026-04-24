@@ -199,4 +199,20 @@ export const admin = {
   exportPayments: (format = 'json') => apiRequest(`/admin/export/payments?format=${format}`),
 };
 
+// User profile & account
+export const profile = {
+  update: (data) => apiRequest('/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  updatePassword: (newPassword) => apiRequest('/profile/password', { method: 'PUT', body: JSON.stringify({ password: newPassword }) }),
+  delete: () => apiRequest('/profile', { method: 'DELETE' }),
+};
+
+// PRD Builder API
+export const prds = {
+  getAll: () => apiRequest('/prds'),
+  get: (id) => apiRequest(`/prds/${id}`),
+  create: (data) => apiRequest('/prds', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => apiRequest(`/prds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => apiRequest(`/prds/${id}`, { method: 'DELETE' }),
+};
+
 export default apiRequest;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { Bot, ArrowLeft, Check, CreditCard, Smartphone, Sparkles, Shield, Clock, Globe } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { pricing } from '../lib/api';
 import { CURRENCIES, convertPrice, formatPrice, setCurrency } from '../lib/currency';
 import { useCurrency } from '../hooks/useCurrency';
 
@@ -14,19 +14,19 @@ const planFeatures: Record<string, string[]> = {
 };
 
 const addons = [
-  { id: 'bookings', name: 'Booking System', price: 499, description: 'Appointment scheduling & calendar integration', icon: '📅', features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'], oneTime: true },
-  { id: 'call', name: 'Voice Calls', price: 699, description: 'Click-to-call & IVR', icon: '📞', features: ['Twilio integration', 'Call forwarding', 'Voicemail', 'Call recording'], oneTime: true },
-  { id: 'email', name: 'Email Marketing', price: 599, description: 'Automated email sequences', icon: '📧', features: ['SMTP integration', 'Email templates', 'Automated sequences', 'Analytics'], oneTime: true },
-  { id: 'humanHandoff', name: 'Human Handoff', price: 349, description: 'Live agent transfer', icon: '👤', features: ['Agent dashboard', 'Chat routing', 'Canned responses', 'Priority alerts'], oneTime: true },
-  { id: 'webhooks', name: 'Webhooks & Zapier', price: 499, description: 'Connect 1000+ apps', icon: '🔗', features: ['Zapier integration', 'Custom webhooks', '300+ apps', 'Custom actions'], oneTime: true },
-  { id: 'crm', name: 'CRM Integration', price: 799, description: 'Salesforce, HubSpot, Zoho', icon: '🔧', features: ['Salesforce sync', 'HubSpot integration', 'Custom CRM', 'Lead mapping'], oneTime: true }
+  { id: 'bookings', name: 'Booking System', price: 1, description: 'Appointment scheduling & calendar integration', icon: '📅', features: ['Multiple services', 'Time slots', 'Email confirmations', 'Calendar sync'], oneTime: true },
+  { id: 'call', name: 'Voice Calls', price: 1, description: 'Click-to-call & IVR', icon: '📞', features: ['Twilio integration', 'Call forwarding', 'Voicemail', 'Call recording'], oneTime: true },
+  { id: 'email', name: 'Email Marketing', price: 1, description: 'Automated email sequences', icon: '📧', features: ['SMTP integration', 'Email templates', 'Automated sequences', 'Analytics'], oneTime: true },
+  { id: 'humanHandoff', name: 'Human Handoff', price: 1, description: 'Live agent transfer', icon: '👤', features: ['Agent dashboard', 'Chat routing', 'Canned responses', 'Priority alerts'], oneTime: true },
+  { id: 'webhooks', name: 'Webhooks & Zapier', price: 1, description: 'Connect 1000+ apps', icon: '🔗', features: ['Zapier integration', 'Custom webhooks', '300+ apps', 'Custom actions'], oneTime: true },
+  { id: 'crm', name: 'CRM Integration', price: 1, description: 'Salesforce, HubSpot, Zoho', icon: '🔧', features: ['Salesforce sync', 'HubSpot integration', 'Custom CRM', 'Lead mapping'], oneTime: true }
 ];
 
 const defaultPlans = [
   { id: 'free', name: 'Free', price: 0, originalPrice: 0, period: 'forever', description: 'For testing', features: planFeatures['free'], validFor: 'Forever', isOnSale: false, popular: false },
-  { id: 'starter', name: 'Starter', price: 999, originalPrice: 1999, period: 'one-time', description: 'One-time payment', features: planFeatures['starter'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Limited', popular: false },
-  { id: 'pro', name: 'Pro', price: 2499, originalPrice: 4999, period: 'one-time', description: 'Most popular', features: planFeatures['pro'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Limited', popular: true },
-  { id: 'enterprise', name: 'Enterprise', price: 9999, originalPrice: 19999, period: 'one-time', description: 'For large teams', features: planFeatures['enterprise'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Limited', popular: false }
+  { id: 'starter', name: 'Starter', price: 1, originalPrice: 1, period: 'one-time', description: 'One-time payment', features: planFeatures['starter'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Testing', popular: false },
+  { id: 'pro', name: 'Pro', price: 1, originalPrice: 1, period: 'one-time', description: 'Most popular', features: planFeatures['pro'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Testing', popular: true },
+  { id: 'enterprise', name: 'Enterprise', price: 1, originalPrice: 1, period: 'one-time', description: 'For large teams', features: planFeatures['enterprise'], validFor: 'Lifetime', isOnSale: true, saleTitle: 'Testing', popular: false }
 ];
 
 export default function Pricing() {
@@ -55,13 +55,7 @@ export default function Pricing() {
   useEffect(() => {
     async function fetchPlans() {
       try {
-        const { data, error } = await supabase
-          .from('subscription_tiers')
-          .select('*')
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true });
-
-        if (error) throw error;
+        const data = await pricing.getTiers();
 
         if (data && data.length > 0) {
           setPlans(data.map((plan: any) => ({

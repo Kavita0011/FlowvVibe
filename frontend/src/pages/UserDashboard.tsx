@@ -10,9 +10,9 @@ import {
   Mail, Phone, Building2, MapPin, User, Search, Filter, RefreshCw, Eye,
   ChevronLeft, ChevronDown
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { fetchLeadsByChatbot, updateLeadStatus, deleteLead } from '../lib/crud';
 import toast from 'react-hot-toast';
+import { chatbots, subscriptions, pricing } from '../lib/api';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
@@ -62,13 +62,11 @@ export default function UserDashboard() {
   const handleSaveProfile = async () => {
     setProfileLoading(true);
     try {
-      if (supabase) {
-        await supabase.from('profiles').update({
-          display_name: user.displayName,
-          company_name: profile.companyName,
-          location: profile.location,
-        }).eq('id', user.id);
-      }
+      await profile.update({
+        displayName: user.displayName,
+        companyName: profile.companyName,
+        location: profile.location
+      });
       toast.success('Profile updated successfully!');
     } catch {
       toast.error('Failed to update profile');
@@ -88,10 +86,7 @@ export default function UserDashboard() {
     }
     setPasswordLoading(true);
     try {
-      if (supabase) {
-        const { error } = await supabase.auth.updateUser({ password: passwords.newPass });
-        if (error) throw error;
-      }
+      await profile.updatePassword(passwords.newPass);
       toast.success('Password updated successfully!');
       setPasswords({ current: '', newPass: '' });
     } catch (err: any) {
@@ -109,9 +104,7 @@ export default function UserDashboard() {
       return;
     }
     try {
-      if (supabase) {
-        await supabase.from('profiles').update({ is_active: false }).eq('id', user.id);
-      }
+      await profile.delete();
       logout();
       navigate('/');
       toast.success('Account marked for deletion');
@@ -129,42 +122,26 @@ export default function UserDashboard() {
       
       setLoading(true);
       try {
-        // Fetch user's chatbots from DB (using profile id)
-        const { data: bots, error: botsError } = await supabase
-          .from('chatbots')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-        if (botsError) console.error('Error fetching chatbots:', botsError);
-        if (bots) setDbChatbots(bots);
+        // Fetch user's chatbots from backend API (Neon)
+        const botsData = await chatbots.getAll();
+        const myBots = botsData?.filter(b => b.user_id === user.id) || [];
+        setDbChatbots(myBots);
 
-        // Fetch user subscription to get tier
-        const { data: subscription } = await supabase
-          .from('user_subscriptions')
-          .select('*, tier:subscription_tiers(*)')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (subscription) {
+        // Fetch user subscription
+        const subData = await subscriptions.get();
+        if (subData) {
           setSubscription({
-            tier_name: subscription.tier?.name || 'Free',
-            tier_id: subscription.tier_id || 'free',
-            status: subscription.status,
-            expires_at: subscription.expires_at
+            tier_name: subData.tier?.name || 'Free',
+            tier_id: subData.tier_id || 'free',
+            status: subData.status,
+            expires_at: subData.expires_at
           });
         }
 
         // Fetch pricing tiers
-        const { data: tiers, error: tiersError } = await supabase
-          .from('subscription_tiers')
-          .select('*')
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true });
-        if (tiersError) {
-          console.error('Error fetching tiers:', tiersError);
-        } else if (tiers && tiers.length > 0) {
-          setPlansList(tiers.map((tier: any) => ({
+        const tiersData = await pricing.getTiers();
+        if (tiersData && tiersData.length > 0) {
+          setPlansList(tiersData.map((tier: any) => ({
             id: tier.tier_key || tier.id,
             name: tier.name,
             price: tier.price,
@@ -175,25 +152,17 @@ export default function UserDashboard() {
         
         // Fetch leads for user's chatbots
         let leads: any[] = [];
-        if (bots && bots.length > 0) {
-          const botIds = bots.map(b => b.id);
-          const { data: leadsData, error: leadsError } = await supabase
-            .from('leads')
-            .select('*')
-            .in('chatbot_id', botIds)
-            .order('created_at', { ascending: false });
-          if (leadsError) {
-            console.error('Error fetching leads:', leadsError);
-          } else if (leadsData) {
-            leads = leadsData;
+        if (myBots.length > 0) {
+          const leadsData = await admin.getLeads();
+          if (leadsData) {
+            leads = leadsData.filter((l: any) => myBots.some((b: any) => b.id === l.chatbot_id));
             setDbLeads(leads);
           }
         }
 
-        // Calculate stats from real data
         setStats({
-          totalBots: bots?.length || 0,
-          conversations: bots?.reduce((acc, b) => acc + (b.conversations_count || 0), 0) || 0,
+          totalBots: myBots.length,
+          conversations: myBots.reduce((acc, b) => acc + (b.conversations_count || 0), 0),
           leads: leads.length,
           avgRating: 4.5
         });

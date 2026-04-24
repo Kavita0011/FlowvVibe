@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
-import { supabase } from '../lib/supabase';
+import { payments } from '../lib/api';
 import { 
   FileText, Download, CheckCircle, XCircle, Clock, Loader2,
   Building, CreditCard, Calendar, User, Mail, Phone, MapPin, Receipt,
@@ -92,16 +92,6 @@ export default function Invoice() {
         } catch (e) {
           console.log('Could not fetch from API, using local data');
         }
-      }
-      
-      // Try Supabase as fallback
-      if (!payment && supabase) {
-        const { data } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('id', pid)
-          .single();
-        if (data) payment = data;
       }
       
       if (payment) {

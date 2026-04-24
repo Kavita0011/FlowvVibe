@@ -10,7 +10,7 @@ import {
   Save, RefreshCw, Activity, UserCheck, UserX, Search,
   MoreVertical, ChevronDown, CheckCircle, XCircle
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { admin } from '../lib/api';
 
 // Pricing plans - Set to Rs.1 for testing
 const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string; saleReason?: string }[] = [
@@ -172,10 +172,9 @@ export default function AdminSettings() {
   const fetchPricingFromBackend = async () => {
     try {
       setBackendLoading(true);
-      const { data, error } = await supabase.from('pricing_plans').select('*').order('price', { ascending: true });
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setCustomPrices(data.map((plan: any) => ({
+      const data = await admin.getSettings();
+      if (data?.pricingPlans && data.pricingPlans.length > 0) {
+        setCustomPrices(data.pricingPlans.map((plan: any) => ({
           id: plan.id,
           name: plan.name,
           price: plan.price,
@@ -196,10 +195,9 @@ export default function AdminSettings() {
 
   const fetchTiersFromBackend = async () => {
     try {
-      const { data, error } = await supabase.from('custom_tiers').select('*').order('min_users', { ascending: true });
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setCustomTiersList(data.map((tier: any) => ({
+      const data = await admin.getSettings();
+      if (data?.customTiers && data.customTiers.length > 0) {
+        setCustomTiersList(data.customTiers.map((tier: any) => ({
           id: tier.id,
           name: tier.name,
           minUsers: tier.min_users,
@@ -214,41 +212,17 @@ export default function AdminSettings() {
 
   const savePricingToBackend = async () => {
     try {
-      // Try API first
-      const API_URL = import.meta.env.VITE_API_URL;
       for (const plan of customPrices) {
-        if (API_URL) {
-          await fetch(`${API_URL}/api/admin/pricing`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: plan.id,
-              name: plan.name,
-              price: plan.price,
-              originalPrice: plan.originalPrice,
-              period: plan.period,
-              description: plan.description,
-              isOnSale: plan.isOnSale,
-              saleReason: plan.saleReason
-            })
-          });
-        }
-      }
-      
-      // Also save to Supabase
-      for (const plan of customPrices) {
-        const { error } = await supabase.from('pricing_plans').upsert({
+        await admin.savePricingPlan({
           id: plan.id,
           name: plan.name,
           price: plan.price,
-          original_price: plan.originalPrice,
+          originalPrice: plan.originalPrice,
           period: plan.period,
           description: plan.description,
-          is_on_sale: plan.isOnSale,
-          sale_reason: plan.saleReason,
-          sale_ends: plan.saleEnds
-        }, { onConflict: 'id' });
-        if (error) throw error;
+          isOnSale: plan.isOnSale,
+          saleReason: plan.saleReason
+        });
       }
       alert('Pricing saved successfully!');
     } catch (e) {
@@ -260,14 +234,7 @@ export default function AdminSettings() {
   const saveTiersToBackend = async () => {
     try {
       for (const tier of customTiersList) {
-        const { error } = await supabase.from('custom_tiers').upsert({
-          id: tier.id,
-          name: tier.name,
-          min_users: tier.minUsers,
-          max_users: tier.maxUsers,
-          price_per_user: tier.pricePerUser
-        }, { onConflict: 'id' });
-        if (error) throw error;
+        await admin.saveSettings({ customTier: tier });
       }
       alert('Tiers saved successfully!');
     } catch (e) {

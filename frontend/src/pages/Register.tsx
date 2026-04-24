@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChatbotStore } from '../stores/chatbotStore';
 import { Bot, ArrowLeft, Mail, Lock, Eye, EyeOff, User, CheckCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/api';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -106,84 +106,34 @@ export default function Register() {
       return;
     }
 
-    setLoading(true);
-    
+setLoading(true);
+
     try {
-      // Try Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            display_name: name,
-          },
-          emailRedirectTo: `${window.location.origin}/register`
-        }
-      });
+      // Use backend API for registration (Neon)
+      const response = await auth.register(email, password, name);
+      
+      const userData = {
+        id: response.user.id,
+        email: response.user.email,
+        displayName: response.user.displayName,
+        role: response.user.role || 'user',
+        isActive: true,
+        emailVerified: true,
+        createdAt: new Date(),
+        subscription: { tier: 'free', status: 'active', startDate: new Date() }
+      };
 
-      if (error) {
-        // If Supabase fails, check if it's email already exists
-        if (error.message.includes('already registered')) {
-          setRegisterError('This email is already registered. Please login instead.');
-          setLoading(false);
-          return;
-        }
-        
-        // Demo mode fallback
-        console.log('Supabase error, using demo mode:', error.message);
-        
-        // Save pending user for verification
-        const pendingUser = {
-          id: `pending_${Date.now()}`,
-          email,
-          displayName: name,
-          role: 'user',
-          isActive: false, // Not active until verified
-          emailVerified: false,
-          createdAt: new Date(),
-          subscription: { tier: 'free', status: 'pending', startDate: new Date() }
-        };
-        
-        // Store pending user
-        const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-        pendingUsers.push(pendingUser);
-        localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
-        
-        // Show verification sent message
-        setVerificationSent(true);
-        setLoading(false);
-        return;
-      }
-
-      if (data.user) {
-        // Check if email confirmation is required
-        if (data.session === null && data.user.email_confirmed_at === null) {
-          // Confirmation email sent
-          setVerificationSent(true);
-        } else {
-          // Auto-confirmed, create user
-          const newUser = {
-            id: data.user.id,
-            email: data.user.email || email,
-            displayName: name,
-            role: 'user',
-            isActive: true,
-            emailVerified: true,
-            createdAt: new Date(),
-            subscription: { tier: 'free', status: 'active', startDate: new Date() }
-          };
-
-          localStorage.setItem('user', JSON.stringify(newUser));
-          localStorage.setItem('isAuthenticated', 'true');
-          setUser(newUser as any);
-          setIsAuthenticated(true);
-          navigate('/dashboard');
-        }
-      }
-    } catch (err) {
-      console.error('Registration error:', err);
-      setRegisterError('Registration failed. Please try again.');
-    } finally {
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isAuthenticated', 'true');
+      
+      setUser(userData);
+      setIsAuthenticated(true);
+      
+      setLoading(false);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setRegisterError(err.message || 'Registration failed');
       setLoading(false);
     }
   };
