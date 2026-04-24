@@ -7,11 +7,9 @@
     "backend"
   ],
   "scripts": {
-    "dev": "npm run dev -w frontend",
+    "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
-    "build": "npm install -w frontend && npm run build -w frontend",
-    "lint": "npm run lint -w frontend",
-    "setup:db": "psql -U postgres -d flowvibe -f backend/setup.sql",
-    "deploy": "npm run deploy -w backend"
+    "build": "npm run build -w frontend",
+    "deploy:backend": "npm run deploy -w backend"
   }
 }
