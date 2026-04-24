@@ -849,48 +849,36 @@ async function handleLogin(request, env) {
 
     // Try to find user in database
     if (env.NEON_DATABASE_URL) {
-      try {
-        const users = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM profiles WHERE email = $1", [email]);
-        
-        if (users && users.length > 0) {
-          const user = users[0];
-          
-          // Check if email is verified
-          if (!user.email_verified && !user.is_active) {
-            return new Response(JSON.stringify({ 
-              error: 'Email not verified. Please check your email and click the verification link.',
-              needsVerification: true,
-              email: email
-            }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const users = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM profiles WHERE email = $1", [email]);
+      
+      if (users && users.length > 0) {
+        const user = users[0];
+
+        // Verify password
+        if (user.password_hash) {
+          const passwordMatch = await verifyPassword(password, user.password_hash);
+          if (!passwordMatch) {
+            trackFailedLogin(email);
+            return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
-          
-          // Verify password if hash exists
-          if (user.password_hash) {
-            const passwordMatch = await verifyPassword(password, user.password_hash);
-            if (!passwordMatch) {
-              trackFailedLogin(email);
-              return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-          }
-          
-          // Clear failed logins on successful login
-          clearFailedLogins(email);
-          const token = await generateToken(user.id, user.role || 'user', env);
-          return new Response(JSON.stringify({
-            user: {
-              id: user.id,
-              email: user.email,
-              displayName: user.display_name,
-              role: user.role || 'user',
-              isActive: user.is_active,
-              emailVerified: user.email_verified
-            },
-            token: token,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
-      } catch (dbErr) {
-        // Database error - don't leak details
+
+        clearFailedLogins(email);
+        const token = await generateToken(user.id, user.role || 'user', env);
+        return new Response(JSON.stringify({
+          user: {
+            id: user.id,
+            email: user.email,
+            displayName: user.display_name,
+            role: user.role || 'user',
+            isActive: user.is_active,
+            emailVerified: user.email_verified
+          },
+          token,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+    } else {
+      return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Track failed login (same message whether user exists or not)
@@ -901,7 +889,8 @@ async function handleLogin(request, env) {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Authentication failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    console.error('Login error:', err.message);
+    return new Response(JSON.stringify({ error: 'Authentication failed: ' + err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 }
 
@@ -914,58 +903,59 @@ async function handleRegister(request, env) {
       return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Validate email format
     if (!isValidEmail(email)) {
       return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Validate password strength
     if (!isStrongPassword(password)) {
       return new Response(JSON.stringify({ error: 'Password must be 8-128 characters' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Sanitize display name
     const sanitizedDisplayName = sanitizeString(displayName) || email.split('@')[0];
 
-    // Create user in database if Neon is configured
-    if (env.NEON_DATABASE_URL) {
-      try {
-        // Check if email already exists
-        const existing = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
-        if (existing && existing.length > 0) {
-          return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-
-        const newUser = await queryNeon(
-          env,
-          "INSERT INTO profiles (id, email, display_name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, display_name, role",
-          [crypto.randomUUID(), email, sanitizedDisplayName, 'user']
-        );
-        
-        if (newUser && newUser.length > 0) {
-          const user = newUser[0];
-          const token = await generateToken(user.id, user.role || 'user', env);
-          return new Response(JSON.stringify({
-            user: {
-              id: user.id,
-              email: user.email,
-              displayName: user.display_name,
-              role: user.role,
-            },
-            token: token,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-      } catch (dbErr) {
-        // Database error - don't leak details
-      }
+    if (!env.NEON_DATABASE_URL) {
+      return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // NO demo mode fallback - require valid credentials and database
-    return new Response(JSON.stringify({ error: 'Registration failed. Please try again later.' }), { 
+    // Check if email already exists
+    const existing = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+    if (existing && existing.length > 0) {
+      return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Hash password using PBKDF2 (same algorithm verifyPassword uses)
+    const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    const hash = await hashPassword(password, salt);
+    const passwordHash = `${salt}$${hash}`;
+
+    const newUser = await queryNeon(
+      env,
+      `INSERT INTO profiles (id, email, display_name, role, password_hash, is_active, email_verified)
+       VALUES ($1, $2, $3, $4, $5, true, true)
+       RETURNING id, email, display_name, role`,
+      [crypto.randomUUID(), email, sanitizedDisplayName, 'user', passwordHash]
+    );
+
+    if (newUser && newUser.length > 0) {
+      const user = newUser[0];
+      const token = await generateToken(user.id, user.role || 'user', env);
+      return new Response(JSON.stringify({
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.display_name,
+          role: user.role,
+        },
+        token,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({ error: 'Registration failed. Please try again.' }), { 
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Registration failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    console.error('Register error:', err.message);
+    return new Response(JSON.stringify({ error: 'Registration failed: ' + err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 }
 
