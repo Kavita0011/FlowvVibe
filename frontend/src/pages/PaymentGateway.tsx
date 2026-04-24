@@ -9,19 +9,19 @@ import {
 } from 'lucide-react';
 
 const ADDONS_DATA = [
-  { id: 'bookings', name: 'Booking System', price: 499 },
-  { id: 'call', name: 'Voice Calls', price: 699 },
-  { id: 'email', name: 'Email Marketing', price: 599 },
-  { id: 'humanHandoff', name: 'Human Handoff', price: 349 },
-  { id: 'webhooks', name: 'Webhooks & Zapier', price: 499 },
-  { id: 'crm', name: 'CRM Integration', price: 799 }
+  { id: 'bookings', name: 'Booking System', price: 1 },
+  { id: 'call', name: 'Voice Calls', price: 1 },
+  { id: 'email', name: 'Email Marketing', price: 1 },
+  { id: 'humanHandoff', name: 'Human Handoff', price: 1 },
+  { id: 'webhooks', name: 'Webhooks & Zapier', price: 1 },
+  { id: 'crm', name: 'CRM Integration', price: 1 }
 ];
 
 const PLANS_DEFAULT = [
   { id: 'free', name: 'Free', price: 0 },
-  { id: 'starter', name: 'Starter', price: 999 },
-  { id: 'pro', name: 'Pro', price: 2499 },
-  { id: 'enterprise', name: 'Enterprise', price: 9999 }
+  { id: 'starter', name: 'Starter', price: 1 },
+  { id: 'pro', name: 'Pro', price: 1 },
+  { id: 'enterprise', name: 'Enterprise', price: 1 }
 ];
 
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || '';

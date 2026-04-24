@@ -20,26 +20,26 @@ const pricingPlans = [
     name: 'Free',
     price: '₹0',
     period: '',
-    description: 'Perfect for testing',
+    description: '1 Chatbot, 50 Messages',
     features: ['1 Chatbot', '50 Conversations', 'Basic Widget', 'Email support'],
     cta: 'Start Free',
     popular: false
   },
   {
     name: 'Pro',
-    price: '₹2,499',
+    price: '₹1',
     period: '',
-    description: 'For growing businesses',
-    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'Analytics', 'Export Widget', 'Priority support'],
+    description: 'Everything Unlimited',
+    features: ['5 Chatbots', 'Unlimited Conversations', 'All Channels', 'All Add-ons', 'Priority Support'],
     cta: 'Get Pro',
     popular: true
   },
   {
     name: 'Enterprise',
-    price: '₹9,999',
+    price: '₹1',
     period: '',
-    description: 'For large organizations',
-    features: ['Unlimited Everything', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee', 'Custom Training'],
+    description: 'Unlimited Everything',
+    features: ['Unlimited Everything', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee'],
     cta: 'Contact Us',
     popular: false
   }

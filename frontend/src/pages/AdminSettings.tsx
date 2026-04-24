@@ -12,12 +12,22 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-// Pricing plans with variations
+// Pricing plans - Set to Rs.1 for testing
 const pricingPlans: { id: string; name: string; price: number; originalPrice: number; period: string; description: string; isOnSale: boolean; saleEnds?: string; saleReason?: string }[] = [
-  { id: 'free', name: 'Free', price: 0, originalPrice: 0, period: 'forever', description: 'For testing', isOnSale: false },
-  { id: 'starter', name: 'Starter', price: 999, originalPrice: 1999, period: 'one-time', description: 'One-time payment', isOnSale: true, saleEnds: '2026-04-30' },
-  { id: 'pro', name: 'Pro', price: 2499, originalPrice: 4999, period: 'one-time', description: 'Most popular', isOnSale: true, saleEnds: '2026-04-30' },
-  { id: 'enterprise', name: 'Enterprise', price: 9999, originalPrice: 19999, period: 'one-time', description: 'For large teams', isOnSale: true, saleEnds: '2026-04-30' }
+  { id: 'free', name: 'Free', price: 0, originalPrice: 0, period: 'forever', description: 'For testing - 1 chatbot, 50 messages', isOnSale: false },
+  { id: 'starter', name: 'Starter', price: 1, originalPrice: 1, period: 'one-time', description: '1 chatbot, 500 messages, all channels', isOnSale: true, saleReason: 'Testing' },
+  { id: 'pro', name: 'Pro', price: 1, originalPrice: 1, period: 'one-time', description: '5 chatbots, unlimited messages, all features', isOnSale: true, saleReason: 'Testing' },
+  { id: 'enterprise', name: 'Enterprise', price: 1, originalPrice: 1, period: 'one-time', description: 'Unlimited everything, priority support', isOnSale: true, saleReason: 'Testing' }
+];
+
+// Addons pricing - Rs.1 for testing
+const ADDONS_DATA = [
+  { id: 'bookings', name: 'Booking System', price: 1, description: 'Multiple services, time slots, calendar sync' },
+  { id: 'call', name: 'Voice Calls', price: 1, description: 'Twilio integration, call forwarding, voicemail' },
+  { id: 'email', name: 'Email Marketing', price: 1, description: 'SMTP integration, email templates, automated sequences' },
+  { id: 'humanHandoff', name: 'Human Handoff', price: 1, description: 'Agent dashboard, chat routing, canned responses' },
+  { id: 'webhooks', name: 'Webhooks & Zapier', price: 1, description: 'Zapier integration, custom webhooks, 300+ apps' },
+  { id: 'crm', name: 'CRM Integration', price: 1, description: 'Salesforce sync, HubSpot integration, custom CRM' }
 ];
 
 // Sale reasons
@@ -36,12 +46,12 @@ const saleReasons = [
   { id: 'other', name: 'Other' }
 ];
 
-// Custom pricing tiers
+// Custom pricing tiers - Rs.1 for testing
 const customTiers: { id: string; name: string; minUsers: number; maxUsers: string; pricePerUser: number }[] = [
-  { id: 'starter', name: 'Starter', minUsers: 1, maxUsers: '5', pricePerUser: 399 },
-  { id: 'team', name: 'Team', minUsers: 6, maxUsers: '20', pricePerUser: 349 },
-  { id: 'business', name: 'Business', minUsers: 21, maxUsers: '50', pricePerUser: 299 },
-  { id: 'enterprise_custom', name: 'Enterprise', minUsers: 51, maxUsers: 'unlimited', pricePerUser: 249 }
+  { id: 'starter', name: 'Starter', minUsers: 1, maxUsers: '5', pricePerUser: 1 },
+  { id: 'team', name: 'Team', minUsers: 6, maxUsers: '20', pricePerUser: 1 },
+  { id: 'business', name: 'Business', minUsers: 21, maxUsers: '50', pricePerUser: 1 },
+  { id: 'enterprise_custom', name: 'Enterprise', minUsers: 51, maxUsers: 'unlimited', pricePerUser: 1 }
 ];
 
 export default function AdminSettings() {
