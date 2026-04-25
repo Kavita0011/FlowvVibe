@@ -9,7 +9,6 @@ ENVIRONMENT = "production"
 [assets]
 directory = "../frontend/dist"
 not_found_handling = "single-page-application"
-cache_control = 
 
 # Performance: Limit worker size
 # Usage model = bundled is default but we can specify
