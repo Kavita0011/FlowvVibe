@@ -7,6 +7,7 @@ const ALLOWED_ORIGINS = [
   'https://flowvibe.pages.dev',
   'https://flowvibe-frontend.pages.dev',
   'https://flowvibe.devappkavita.workers.dev',
+  'https://flowvibe-api.devappkavita.workers.dev',
   'https://flowvibe.kavitabishtofficial1.workers.dev',
   'http://localhost:5173',
   'http://localhost:3000',
@@ -14,15 +15,22 @@ const ALLOWED_ORIGINS = [
 
 const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Max-Age': '86400',
 };
 
 function getCorsHeaders(request) {
   const origin = request.headers.get('Origin') || '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] || '*');
+  // Allow any workers.dev, pages.dev, or localhost origin dynamically
+  const isAllowed = ALLOWED_ORIGINS.includes(origin)
+    || /^https:\/\/.*\.workers\.dev$/.test(origin)
+    || /^https:\/\/.*\.pages\.dev$/.test(origin)
+    || /^http:\/\/localhost(:\d+)?$/.test(origin);
+
   return {
     ...corsHeaders,
-    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
   };
 }
 
@@ -486,7 +494,7 @@ export default {
           )`, []);
 
           // Create admin user
-          const adminEmail = env.ADMIN_EMAIL || 'admin@flowvibe.app';
+          const adminEmail = env.ADMIN_EMAIL || 'devappkavita@gmail.com';
           const adminPassword = env.ADMIN_PASSWORD || 'FlowVibe@Admin2024!';
           const existing = await queryNeon(env, 'SELECT id FROM profiles WHERE email = $1', [adminEmail]);
           let adminCreated = false;
@@ -944,7 +952,7 @@ async function handleLogin(request, env) {
   }
 
   // Admin login — credentials stored as Cloudflare secrets
-  const adminEmail = env.ADMIN_EMAIL || 'admin@flowvibe.app';
+  const adminEmail = env.ADMIN_EMAIL || 'devappkavita@gmail.com';
   const adminPassword = env.ADMIN_PASSWORD || '';
 
   if (adminPassword && email === adminEmail && password === adminPassword) {

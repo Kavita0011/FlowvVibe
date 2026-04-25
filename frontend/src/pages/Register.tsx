@@ -36,10 +36,11 @@ export default function Register() {
     
     try {
       // Call API to verify
-      const API_URL = import.meta.env.VITE_API_URL;
+      const raw = import.meta.env.VITE_API_URL || '';
+      const API_URL = raw ? `${raw.replace(/\/$/, '')}/api` : '/api';
       
       if (API_URL) {
-        const response = await fetch(`${API_URL}/api/auth/verify`, {
+        const response = await fetch(`${API_URL}/auth/verify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token, email })

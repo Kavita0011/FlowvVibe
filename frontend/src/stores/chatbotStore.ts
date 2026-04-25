@@ -36,6 +36,12 @@ import {
   type ValidationResult 
 } from '../utils/validation';
 
+// Helper: build correct API base URL (worker routes all live under /api)
+function getApiBase(): string {
+  const raw = import.meta.env.VITE_API_URL || '';
+  return raw ? `${raw.replace(/\/$/, '')}/api` : '/api';
+}
+
 interface ChatbotState {
   user: User | null;
   isAdmin: boolean;
@@ -186,7 +192,7 @@ export const useChatbotStore = create<ChatbotState>()(
         
         try {
           // Try real backend first
-          const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, {
+          const response = await fetch(`${getApiBase()}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -238,7 +244,7 @@ export const useChatbotStore = create<ChatbotState>()(
         // Call backend logout (fire and forget)
         const token = localStorage.getItem('token');
         if (token) {
-          fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/logout`, {
+          fetch(`${getApiBase()}/auth/logout`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           }).catch(() => {});
@@ -292,7 +298,7 @@ export const useChatbotStore = create<ChatbotState>()(
         globalRateLimiter.recordAttempt(`register_${email}`);
         
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/register`, {
+          const response = await fetch(`${getApiBase()}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: sanitizedEmail, password, displayName: sanitizedName }),

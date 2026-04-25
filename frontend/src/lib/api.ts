@@ -3,7 +3,10 @@
  * Connects frontend to Cloudflare Worker API (which uses Neon)
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+// VITE_API_URL = https://flowvibe-api.devappkavita.workers.dev
+// All worker routes are under /api/... so we append /api
+const _rawBase = import.meta.env.VITE_API_URL || '';
+const API_BASE = _rawBase ? `${_rawBase.replace(/\/$/, '')}/api` : '/api';
 
 function sanitizeInput(input: any) {
   if (typeof input !== 'string') return input;
