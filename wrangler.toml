@@ -1,4 +1,4 @@
-name = "flowvibe-api"
+name = "flowvibe"
 main = "backend/worker.js"
 compatibility_date = "2024-04-01"
 compatibility_flags = ["nodejs_compat"]
