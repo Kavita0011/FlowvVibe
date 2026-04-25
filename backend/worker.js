@@ -14,9 +14,10 @@ const ALLOWED_ORIGINS = [
 ];
 
 const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Credentials': 'false',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -449,7 +450,7 @@ export default {
         }
         try {
           // Create tables if not exist
-          await queryNeon(env, `CREATE TABLE IF NOT EXISTS profiles (
+          await queryNeon(env, `CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
             display_name TEXT,
@@ -496,13 +497,13 @@ export default {
           // Create admin user
           const adminEmail = env.ADMIN_EMAIL || 'devappkavita@gmail.com';
           const adminPassword = env.ADMIN_PASSWORD || 'FlowVibe@Admin2024!';
-          const existing = await queryNeon(env, 'SELECT id FROM profiles WHERE email = $1', [adminEmail]);
+          const existing = await queryNeon(env, 'SELECT id FROM users WHERE email = $1', [adminEmail]);
           let adminCreated = false;
           if (!existing.rows || existing.rows.length === 0) {
             const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
             const hash = await hashPassword(adminPassword, salt);
             const adminId = 'admin_001';
-            await queryNeon(env, `INSERT INTO profiles (id, email, display_name, role, password_hash, is_active, email_verified)
+            await queryNeon(env, `INSERT INTO users (id, email, display_name, role, password_hash, is_active, email_verified)
               VALUES ($1, $2, $3, $4, $5, true, true)
               ON CONFLICT (id) DO NOTHING`,
               [adminId, adminEmail, 'Admin', 'admin', `${salt}$${hash}`]
@@ -918,7 +919,7 @@ function demoQuery(sql, params) {
     return [];
   }
   if (sqlLower.includes('select')) {
-    if (sqlLower.includes('profiles') || sqlLower.includes('users')) return globalThis.db.users;
+    if (sqlLower.includes('users') || sqlLower.includes('users')) return globalThis.db.users;
     if (sqlLower.includes('chatbots')) return globalThis.db.chatbots;
     if (sqlLower.includes('payment')) return globalThis.db.payments;
     if (sqlLower.includes('messages')) return globalThis.db.messages;
@@ -973,7 +974,7 @@ async function handleLogin(request, env) {
 
   // Try to find user in Neon database
   if (env.NEON_DATABASE_URL) {
-    const result = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM profiles WHERE email = $1", [email]);
+    const result = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM users WHERE email = $1", [email]);
     const users = getRows(result);
     
     if (users && users.length > 0) {
@@ -1044,11 +1045,17 @@ async function handleRegister(request, env) {
   const sanitizedDisplayName = sanitizeString(displayName) || email.split('@')[0];
 
   if (!env.NEON_DATABASE_URL) {
-    return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: 'Database not configured. Contact support.' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Quick connectivity check
+  const ping = await queryNeon(env, 'SELECT 1 as ok', []);
+  if (ping.error) {
+    return new Response(JSON.stringify({ error: 'Database unreachable', detail: ping.error }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   // Check if email already exists
-  const existingResult = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+  const existingResult = await queryNeon(env, "SELECT id FROM users WHERE email = $1", [email.toLowerCase().trim()]);
   const existing = getRows(existingResult);
   if (existing && existing.length > 0) {
     return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1064,14 +1071,14 @@ async function handleRegister(request, env) {
   // Insert into Neon
   const insertResult = await queryNeon(
     env,
-    `INSERT INTO profiles (id, email, display_name, role, password_hash, is_active, email_verified)
+    `INSERT INTO users (id, email, display_name, role, password_hash, is_active, email_verified)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [userId, email, sanitizedDisplayName, 'user', passwordHash, true, true]
   );
 
   if (insertResult.error) {
     console.error('Register insert error:', insertResult.error);
-    return new Response(JSON.stringify({ error: 'Registration failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: 'Registration failed', detail: insertResult.error }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   const token = await generateToken(userId, 'user', env);
@@ -1145,14 +1152,14 @@ async function handleForgotPassword(request, env) {
     }
 
     if (env.NEON_DATABASE_URL) {
-      const userResult = await queryNeon(env, "SELECT id FROM profiles WHERE email = $1", [email]);
+      const userResult = await queryNeon(env, "SELECT id FROM users WHERE email = $1", [email]);
       const userRows = getRows(userResult);
 
       if (userRows && userRows.length > 0) {
         const resetToken = crypto.randomUUID();
         
         await queryNeon(env,
-          "UPDATE profiles SET verification_token = $1, updated_at = NOW() WHERE id = $2",
+          "UPDATE users SET verification_token = $1, updated_at = NOW() WHERE id = $2",
           [resetToken, userRows[0].id]
         );
       }
@@ -1196,7 +1203,7 @@ async function handleResetPassword(request, env) {
 
     if (env.NEON_DATABASE_URL) {
       const user = await queryNeon(env,
-        "SELECT id, verification_token FROM profiles WHERE email = $1",
+        "SELECT id, verification_token FROM users WHERE email = $1",
         [email]
       );
 
@@ -1208,7 +1215,7 @@ async function handleResetPassword(request, env) {
 
       const passwordHash = hashPassword(newPassword);
       await queryNeon(env,
-        "UPDATE profiles SET password_hash = $1, verification_token = NULL, updated_at = NOW() WHERE id = $2",
+        "UPDATE users SET password_hash = $1, verification_token = NULL, updated_at = NOW() WHERE id = $2",
         [passwordHash, user[0].id]
       );
 
@@ -1871,7 +1878,7 @@ async function handleGetAllPayments(request, env, adminAuth) {
 
     let query = `SELECT p.*, u.email as user_email, u.display_name as user_name
                  FROM payments p
-                 LEFT JOIN profiles u ON p.user_id = u.id`;
+                 LEFT JOIN users u ON p.user_id = u.id`;
     const params = [];
 
     if (status && status !== 'all') {
@@ -1908,7 +1915,7 @@ async function handleGetAllLeads(request, env, adminAuth) {
       leads = await queryNeon(env, `SELECT l.*, c.name as chatbot_name, u.email as user_email
         FROM leads l
         LEFT JOIN chatbots c ON l.chatbot_id = c.id
-        LEFT JOIN profiles u ON c.user_id = u.id
+        LEFT JOIN users u ON c.user_id = u.id
         ORDER BY l.created_at DESC LIMIT 100`);
     }
     
@@ -2278,7 +2285,7 @@ async function handleGetAllUsers(request, env) {
     
     if (env.NEON_DATABASE_URL) {
       const result = await queryNeon(env, 
-        `SELECT id, email, display_name, role, is_active, created_at FROM profiles ORDER BY created_at DESC LIMIT 100`
+        `SELECT id, email, display_name, role, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 100`
       );
       users = getRows(result);
     }
@@ -2326,7 +2333,7 @@ async function handleUpdateUser(request, env, adminAuth) {
     
     if (env.NEON_DATABASE_URL) {
       await queryNeon(env,
-        "UPDATE profiles SET is_active = $1, role = $2, updated_at = NOW() WHERE id = $3",
+        "UPDATE users SET is_active = $1, role = $2, updated_at = NOW() WHERE id = $3",
         [isActive, role, userId]
       );
       
@@ -2642,7 +2649,7 @@ async function handleExportChatbots(request, env, adminAuth) {
       chatbots = await queryNeon(env,
         `SELECT c.*, u.email as owner_email, u.display_name as owner_name, st.name as tier_name
          FROM chatbots c
-         LEFT JOIN profiles u ON c.user_id = u.id
+         LEFT JOIN users u ON c.user_id = u.id
          LEFT JOIN user_subscriptions us ON u.id = us.user_id AND us.status = 'active'
          LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key
          ORDER BY c.created_at DESC`
@@ -2682,7 +2689,7 @@ async function handleExportUsers(request, env, adminAuth) {
         `SELECT p.id, p.email, p.display_name, p.role, p.is_active, p.created_at,
                 us.tier_id, st.name as tier_name, st.price as tier_price,
                 (SELECT COUNT(*)::int FROM chatbots WHERE user_id = p.id) as chatbot_count
-         FROM profiles p
+         FROM users p
          LEFT JOIN user_subscriptions us ON p.id = us.user_id AND us.status = 'active'
          LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key
          ORDER BY p.created_at DESC`
@@ -2721,7 +2728,7 @@ async function handleExportPayments(request, env, adminAuth) {
       payments = await queryNeon(env,
         `SELECT p.*, u.email as user_email, u.display_name as user_name
          FROM payments p
-         LEFT JOIN profiles u ON p.user_id = u.id
+         LEFT JOIN users u ON p.user_id = u.id
          ORDER BY p.created_at DESC`
       );
     }
@@ -2760,7 +2767,7 @@ async function handleGetAllChatbotsAdmin(request, env, adminAuth) {
     let query = `SELECT c.*, u.email as owner_email, u.display_name as owner_name,
                  us.tier_id, st.name as tier_name
                  FROM chatbots c
-                 LEFT JOIN profiles u ON c.user_id = u.id
+                 LEFT JOIN users u ON c.user_id = u.id
                  LEFT JOIN user_subscriptions us ON u.id = us.user_id AND us.status = 'active'
                  LEFT JOIN subscription_tiers st ON us.tier_id = st.tier_key`;
 
@@ -2893,7 +2900,7 @@ async function handleUpdateProfile(request, env, userAuth) {
     
     if (env.NEON_DATABASE_URL) {
       await queryNeon(env,
-        "UPDATE profiles SET display_name = $1, email = $2, updated_at = NOW() WHERE id = $3",
+        "UPDATE users SET display_name = $1, email = $2, updated_at = NOW() WHERE id = $3",
         [displayName, email || null, userId]
       );
     }
