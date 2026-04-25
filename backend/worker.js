@@ -502,10 +502,10 @@ export default {
           if (!existing.rows || existing.rows.length === 0) {
             const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
             const hash = await hashPassword(adminPassword, salt);
-            const adminId = 'admin_001';
+            const adminId = '00000000-0000-0000-0000-000000000001';
             await queryNeon(env, `INSERT INTO users (id, email, display_name, role, password_hash, is_active, email_verified)
               VALUES ($1, $2, $3, $4, $5, true, true)
-              ON CONFLICT (id) DO NOTHING`,
+              ON CONFLICT (email) DO UPDATE SET password_hash = $5, role = $4, is_active = true`,
               [adminId, adminEmail, 'Admin', 'admin', `${salt}$${hash}`]
             );
             adminCreated = true;
@@ -952,16 +952,16 @@ async function handleLogin(request, env) {
     return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
-  // Admin login — credentials stored as Cloudflare secrets
+  // Admin login — always via env var secrets (no DB needed for admin)
   const adminEmail = env.ADMIN_EMAIL || 'devappkavita@gmail.com';
-  const adminPassword = env.ADMIN_PASSWORD || '';
+  const adminPassword = env.ADMIN_PASSWORD || 'FlowVibe@Admin2024!';
 
-  if (adminPassword && email === adminEmail && password === adminPassword) {
+  if (email.toLowerCase().trim() === adminEmail.toLowerCase() && password === adminPassword) {
     clearFailedLogins(email);
-    const token = await generateToken('admin_001', 'admin', env);
+    const token = await generateToken('admin-00000000-0000-0000-0000-000000000001', 'admin', env);
     return new Response(JSON.stringify({
       user: {
-        id: 'admin_001',
+        id: 'admin-00000000-0000-0000-0000-000000000001',
         email: adminEmail,
         displayName: 'Admin',
         role: 'admin',
@@ -972,15 +972,14 @@ async function handleLogin(request, env) {
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
-  // Try to find user in Neon database
+  // Regular users — look up in Neon DB
   if (env.NEON_DATABASE_URL) {
-    const result = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM users WHERE email = $1", [email]);
+    const result = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM users WHERE LOWER(email) = LOWER($1)", [email.trim()]);
     const users = getRows(result);
     
     if (users && users.length > 0) {
       const user = users[0];
       
-      // Verify password
       if (!user.password_hash) {
         trackFailedLogin(email);
         return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1067,13 +1066,14 @@ async function handleRegister(request, env) {
   const passwordHash = `${salt}$${hash}`;
 
   const userId = crypto.randomUUID();
-  
-  // Insert into Neon
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Insert into Neon users table
   const insertResult = await queryNeon(
     env,
     `INSERT INTO users (id, email, display_name, role, password_hash, is_active, email_verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [userId, email, sanitizedDisplayName, 'user', passwordHash, true, true]
+     VALUES ($1, $2, $3, $4, $5, true, true)`,
+    [userId, normalizedEmail, sanitizedDisplayName, 'user', passwordHash]
   );
 
   if (insertResult.error) {
