@@ -1086,7 +1086,7 @@ async function handleRegister(request, env) {
   }
 
   // Check if email already exists
-  const existingResult = await queryNeon(env, "SELECT id FROM "user" WHERE LOWER(email) = LOWER($1)", [email.toLowerCase().trim()]);
+  const existingResult = await queryNeon(env, `SELECT id FROM "user" WHERE LOWER(email) = LOWER($1)`, [email]);
   const existing = getRows(existingResult);
   if (existing && existing.length > 0) {
     return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
