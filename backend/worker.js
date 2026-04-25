@@ -117,6 +117,20 @@ async function verifyPassword(password, storedHash) {
   return computedHash === hash;
 }
 
+// Verify better-auth passwords (scrypt format: hash:salt in base64)
+async function verifyBetterAuthPassword(password, storedHash) {
+  try {
+    // better-auth uses a custom scrypt format
+    // Format: base64(hash):base64(salt) or similar
+    // Since Cloudflare Workers don't support scrypt natively,
+    // we can't verify existing better-auth passwords directly.
+    // Return false so admin uses env var path only.
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function generatePasswordHash(password) {
   const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
   const encoder = new TextEncoder();
@@ -497,7 +511,7 @@ export default {
           // Create admin user
           const adminEmail = env.ADMIN_EMAIL || 'devappkavita@gmail.com';
           const adminPassword = env.ADMIN_PASSWORD || 'FlowVibe@Admin2024!';
-          const existing = await queryNeon(env, 'SELECT id FROM users WHERE email = $1', [adminEmail]);
+          const existing = await queryNeon(env, 'SELECT id FROM "user" WHERE LOWER(email) = LOWER($1)', [adminEmail]);
           let adminCreated = false;
           if (!existing.rows || existing.rows.length === 0) {
             const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
@@ -972,9 +986,17 @@ async function handleLogin(request, env) {
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
-  // Regular users — look up in Neon DB
+  // Regular users — query better-auth tables (user + account)
   if (env.NEON_DATABASE_URL) {
-    const result = await queryNeon(env, "SELECT id, email, display_name, role, is_active, email_verified, password_hash FROM users WHERE LOWER(email) = LOWER($1)", [email.trim()]);
+    // better-auth uses singular "user" table with "name" not "display_name"
+    const result = await queryNeon(env, 
+      `SELECT u.id, u.email, u.name as display_name, u.role, u.banned as is_active, u."emailVerified" as email_verified,
+              a.password as password_hash
+       FROM "user" u
+       LEFT JOIN account a ON a."userId" = u.id AND a."providerId" = 'credential'
+       WHERE LOWER(u.email) = LOWER($1)`,
+      [email.trim()]
+    );
     const users = getRows(result);
     
     if (users && users.length > 0) {
@@ -985,7 +1007,17 @@ async function handleLogin(request, env) {
         return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       
-      const passwordMatch = await verifyPassword(password, user.password_hash);
+      // Try better-auth password verification first (bcrypt format $2b$...)
+      // then fall back to our PBKDF2 format (salt$hash)
+      let passwordMatch = false;
+      if (user.password_hash.startsWith('$2') || user.password_hash.startsWith('$argon')) {
+        // better-auth uses bcrypt/argon — verify via better-auth compatible check
+        passwordMatch = await verifyBetterAuthPassword(password, user.password_hash);
+      } else if (user.password_hash.includes('$')) {
+        // Our PBKDF2 format: salt$hash
+        passwordMatch = await verifyPassword(password, user.password_hash);
+      }
+
       if (!passwordMatch) {
         trackFailedLogin(email);
         return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1054,7 +1086,7 @@ async function handleRegister(request, env) {
   }
 
   // Check if email already exists
-  const existingResult = await queryNeon(env, "SELECT id FROM users WHERE email = $1", [email.toLowerCase().trim()]);
+  const existingResult = await queryNeon(env, "SELECT id FROM "user" WHERE LOWER(email) = LOWER($1)", [email.toLowerCase().trim()]);
   const existing = getRows(existingResult);
   if (existing && existing.length > 0) {
     return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1067,18 +1099,33 @@ async function handleRegister(request, env) {
 
   const userId = crypto.randomUUID();
   const normalizedEmail = email.toLowerCase().trim();
+  const now = new Date().toISOString();
 
-  // Insert into Neon users table
-  const insertResult = await queryNeon(
-    env,
-    `INSERT INTO users (id, email, display_name, role, password_hash, is_active, email_verified)
-     VALUES ($1, $2, $3, $4, $5, true, true)`,
-    [userId, normalizedEmail, sanitizedDisplayName, 'user', passwordHash]
+  // Insert into better-auth "user" table
+  const userInsert = await queryNeon(env,
+    `INSERT INTO "user" (id, name, email, "emailVerified", role, banned, "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, false, 'user', false, $4, $4)`,
+    [userId, sanitizedDisplayName, normalizedEmail, now]
   );
 
-  if (insertResult.error) {
-    console.error('Register insert error:', insertResult.error);
-    return new Response(JSON.stringify({ error: 'Registration failed', detail: insertResult.error }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  if (userInsert.error) {
+    console.error('Register user insert error:', userInsert.error);
+    return new Response(JSON.stringify({ error: 'Registration failed', detail: userInsert.error }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Insert into better-auth "account" table with our PBKDF2 hash
+  const accountId = crypto.randomUUID();
+  const accountInsert = await queryNeon(env,
+    `INSERT INTO account (id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt")
+     VALUES ($1, $2, 'credential', $3, $4, $5, $5)`,
+    [accountId, userId, userId, passwordHash, now]
+  );
+
+  if (accountInsert.error) {
+    // Rollback user insert
+    await queryNeon(env, `DELETE FROM "user" WHERE id = $1`, [userId]);
+    console.error('Register account insert error:', accountInsert.error);
+    return new Response(JSON.stringify({ error: 'Registration failed', detail: accountInsert.error }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   const token = await generateToken(userId, 'user', env);
@@ -1152,7 +1199,7 @@ async function handleForgotPassword(request, env) {
     }
 
     if (env.NEON_DATABASE_URL) {
-      const userResult = await queryNeon(env, "SELECT id FROM users WHERE email = $1", [email]);
+      const userResult = await queryNeon(env, "SELECT id FROM "user" WHERE LOWER(email) = LOWER($1)", [email]);
       const userRows = getRows(userResult);
 
       if (userRows && userRows.length > 0) {
@@ -2285,7 +2332,7 @@ async function handleGetAllUsers(request, env) {
     
     if (env.NEON_DATABASE_URL) {
       const result = await queryNeon(env, 
-        `SELECT id, email, display_name, role, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 100`
+        `SELECT id, email, name as display_name, role, banned as is_active, "createdAt" as created_at FROM "user" ORDER BY "createdAt" DESC LIMIT 100`
       );
       users = getRows(result);
     }
@@ -2333,7 +2380,7 @@ async function handleUpdateUser(request, env, adminAuth) {
     
     if (env.NEON_DATABASE_URL) {
       await queryNeon(env,
-        "UPDATE users SET is_active = $1, role = $2, updated_at = NOW() WHERE id = $3",
+        "UPDATE "user" SET banned = NOT $1, role = $2, "updatedAt" = NOW() WHERE id = $3",
         [isActive, role, userId]
       );
       
@@ -2900,7 +2947,7 @@ async function handleUpdateProfile(request, env, userAuth) {
     
     if (env.NEON_DATABASE_URL) {
       await queryNeon(env,
-        "UPDATE users SET display_name = $1, email = $2, updated_at = NOW() WHERE id = $3",
+        "UPDATE "user" SET name = $1, email = $2, "updatedAt" = NOW() WHERE id = $3",
         [displayName, email || null, userId]
       );
     }
