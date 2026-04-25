@@ -1199,7 +1199,7 @@ async function handleForgotPassword(request, env) {
     }
 
     if (env.NEON_DATABASE_URL) {
-      const userResult = await queryNeon(env, queryNeon(env, `SELECT id FROM "users" WHERE LOWER(email) = LOWER($1)`, [email]);
+      const userResult = await queryNeon(env, `SELECT id FROM "users" WHERE LOWER(email) = LOWER($1)`, [email]);
       const userRows = getRows(userResult);
 
       if (userRows && userRows.length > 0) {
