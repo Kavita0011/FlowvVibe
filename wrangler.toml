@@ -9,7 +9,6 @@ ENVIRONMENT = "production"
 [assets]
 directory = "frontend/dist"
 not_found_handling = "single-page-application"
-cache_control = { bypass = false, edge_ttl = 3600, browser_ttl = 86400 }
 
 # Cloudflare Secrets (set via wrangler secret put)
 # NEON_DATABASE_URL
