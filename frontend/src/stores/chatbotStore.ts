@@ -235,9 +235,21 @@ export const useChatbotStore = create<ChatbotState>()(
       loginWithAdmin: async () => false,
       
       logout: () => {
+        // Call backend logout (fire and forget)
+        const token = localStorage.getItem('token');
+        if (token) {
+          fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/logout`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          }).catch(() => {});
+        }
+        // Clear all local storage auth keys
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        set({ user: null, isAdmin: false, isAuthenticated: false, currentChatbot: null, chatbots: [] });
+        localStorage.removeItem('isAuthenticated');
+        sessionStorage.clear();
+        // Reset store
+        set({ user: null, isAdmin: false, isAuthenticated: false, currentChatbot: null, chatbots: [], error: null });
       },
       
       register: async (email, password, displayName) => {

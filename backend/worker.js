@@ -416,9 +416,100 @@ export default {
     try {
       // Health check
       if (path === '/api/health') {
-        return new Response(JSON.stringify({ status: 'ok', database: env.NEON_DATABASE_URL ? 'connected' : 'not_configured' }), {
+        const dbStatus = env.NEON_DATABASE_URL ? 'connected' : 'not_configured';
+        // Quick ping to verify Neon is reachable
+        let dbOk = false;
+        if (env.NEON_DATABASE_URL) {
+          const ping = await queryNeon(env, 'SELECT 1 as ok', []);
+          dbOk = !ping.error && ping.rows.length > 0;
+        }
+        return new Response(JSON.stringify({ 
+          status: 'ok', 
+          database: dbStatus,
+          db_reachable: dbOk,
+          timestamp: new Date().toISOString()
+        }), {
           headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+
+      // DB Init — creates tables + admin user (call once after deploy)
+      if (path === '/api/init' && request.method === 'POST') {
+        const body = await parseJson(request);
+        if (!body || body.secret !== (env.INIT_SECRET || 'flowvibe-init-2024')) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        }
+        try {
+          // Create tables if not exist
+          await queryNeon(env, `CREATE TABLE IF NOT EXISTS profiles (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            display_name TEXT,
+            role TEXT DEFAULT 'user',
+            password_hash TEXT,
+            is_active BOOLEAN DEFAULT true,
+            email_verified BOOLEAN DEFAULT false,
+            subscription_tier TEXT DEFAULT 'free',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            last_login_at TIMESTAMPTZ
+          )`, []);
+          await queryNeon(env, `CREATE TABLE IF NOT EXISTS chatbots (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            industry TEXT,
+            description TEXT,
+            tone TEXT DEFAULT 'friendly',
+            flow_data JSONB DEFAULT '{}',
+            is_published BOOLEAN DEFAULT false,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`, []);
+          await queryNeon(env, `CREATE TABLE IF NOT EXISTS payments (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            user_id TEXT NOT NULL,
+            amount NUMERIC NOT NULL,
+            currency TEXT DEFAULT 'INR',
+            status TEXT DEFAULT 'pending',
+            plan TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`, []);
+          await queryNeon(env, `CREATE TABLE IF NOT EXISTS leads (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            chatbot_id TEXT NOT NULL,
+            name TEXT,
+            email TEXT,
+            phone TEXT,
+            status TEXT DEFAULT 'new',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`, []);
+
+          // Create admin user
+          const adminEmail = env.ADMIN_EMAIL || 'admin@flowvibe.app';
+          const adminPassword = env.ADMIN_PASSWORD || 'FlowVibe@Admin2024!';
+          const existing = await queryNeon(env, 'SELECT id FROM profiles WHERE email = $1', [adminEmail]);
+          let adminCreated = false;
+          if (!existing.rows || existing.rows.length === 0) {
+            const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+            const hash = await hashPassword(adminPassword, salt);
+            const adminId = 'admin_001';
+            await queryNeon(env, `INSERT INTO profiles (id, email, display_name, role, password_hash, is_active, email_verified)
+              VALUES ($1, $2, $3, $4, $5, true, true)
+              ON CONFLICT (id) DO NOTHING`,
+              [adminId, adminEmail, 'Admin', 'admin', `${salt}$${hash}`]
+            );
+            adminCreated = true;
+          }
+          return new Response(JSON.stringify({ 
+            success: true, 
+            message: 'Database initialized',
+            admin_created: adminCreated,
+            admin_email: adminEmail,
+          }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        } catch (e) {
+          return new Response(JSON.stringify({ error: 'Init failed', detail: e.message }), { status: 500, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        }
       }
 
       // Free PRD Download (no auth required)
@@ -483,6 +574,13 @@ export default {
         const body = await parseJson(request);
         if (!body) return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         return handleResetPassword({ json: () => Promise.resolve(body) }, env);
+      }
+
+      // Logout — token invalidation is handled client-side; server just confirms
+      if (path === '/api/auth/logout' && request.method === 'POST') {
+        return new Response(JSON.stringify({ success: true, message: 'Logged out' }), {
+          headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
+        });
       }
 
       // Pricing Plans API
@@ -752,46 +850,40 @@ async function queryNeon(env, sql, params = []) {
   }
 
   try {
-    // Parse connection string: postgresql://user:pass@host/db?sslmode=require
-    const urlMatch = connectionString.match(/@([^:\/]+)[^\/]*\/([^?]+)/);
-    if (!urlMatch) {
-      return { rows: [], error: 'Invalid connection string' };
-    }
-    
-    const host = urlMatch[1]; // e.g., ep-silent-paper-am8ltwpf-pooler...
-    const database = urlMatch[2];
-    const branch = host.split('.')[0]; // e.g., ep-silent-paper-am8ltwpf
-    
-    // Extract credentials
-    const credMatch = connectionString.match(/\/\/([^:]+):(.+)@/);
-    const auth = credMatch ? credMatch[2] : '';
-    
-    // Use Neon serverless SQL endpoint
-    const endpoint = `https://${branch}.sql.neon.tech/v2/query`;
-    
-    const response = await fetch(endpoint, {
+    // Parse postgresql://user:pass@host/db?...
+    const withoutProto = connectionString.replace(/^(postgresql|postgres):\/\//, '');
+    const atIdx = withoutProto.lastIndexOf('@');
+    const credentials = withoutProto.substring(0, atIdx);
+    const rest = withoutProto.substring(atIdx + 1);
+    const colonIdx = credentials.indexOf(':');
+    const user = decodeURIComponent(credentials.substring(0, colonIdx));
+    const password = decodeURIComponent(credentials.substring(colonIdx + 1));
+    const hostAndDb = rest.split('?')[0];
+    const host = hostAndDb.split('/')[0];
+
+    // Neon HTTP SQL API — correct endpoint
+    const response = await fetch(`https://${host}/sql`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${auth}`,
-        'DbName': database,
+        'Authorization': 'Basic ' + btoa(`${user}:${password}`),
+        'Neon-Connection-String': connectionString,
       },
-      body: JSON.stringify({ 
-        query: sql, 
-        params: params || [] 
-      }),
+      body: JSON.stringify({ query: sql, params: params || [] }),
     });
 
+    const text = await response.text();
     if (!response.ok) {
-      const errText = await response.text();
-      console.error('Neon error:', response.status, errText);
-      return { rows: [], error: errText };
+      console.error('Neon SQL error:', response.status, text);
+      return { rows: [], error: text };
     }
-    
-    const data = await response.json();
-    return { rows: data || [], error: null };
+
+    let data;
+    try { data = JSON.parse(text); } catch { return { rows: [], error: 'Bad JSON from Neon' }; }
+    // Neon returns { rows: [...], fields: [...] }
+    return { rows: Array.isArray(data.rows) ? data.rows : [], error: null };
   } catch (e) {
-    console.error('queryNeon error:', e.message);
+    console.error('queryNeon exception:', e.message);
     return { rows: [], error: e.message };
   }
 }
@@ -851,13 +943,13 @@ async function handleLogin(request, env) {
     return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
-  // Admin login
-  const adminEmail = env.VITE_ADMIN_EMAIL || 'devappkavita@gmail.com';
-  const adminPassword = env.VITE_ADMIN_PASSWORD || 'Admin@123';
-  
-  if (email === adminEmail && password === adminPassword) {
+  // Admin login — credentials stored as Cloudflare secrets
+  const adminEmail = env.ADMIN_EMAIL || 'admin@flowvibe.app';
+  const adminPassword = env.ADMIN_PASSWORD || '';
+
+  if (adminPassword && email === adminEmail && password === adminPassword) {
     clearFailedLogins(email);
-    const token = await generateToken('admin_001', 'admin');
+    const token = await generateToken('admin_001', 'admin', env);
     return new Response(JSON.stringify({
       user: {
         id: 'admin_001',
@@ -867,7 +959,7 @@ async function handleLogin(request, env) {
         isActive: true,
         emailVerified: true
       },
-      token: token,
+      token,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
@@ -897,7 +989,7 @@ async function handleLogin(request, env) {
       }
       
       clearFailedLogins(email);
-      const token = await generateToken(user.id, user.role || 'user');
+      const token = await generateToken(user.id, user.role || 'user', env);
       return new Response(JSON.stringify({
         user: {
           id: user.id,
@@ -907,7 +999,7 @@ async function handleLogin(request, env) {
           isActive: user.is_active,
           emailVerified: user.email_verified
         },
-        token: token,
+        token,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
   }
